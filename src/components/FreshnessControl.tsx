@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { Product, ProductCategory, Inspection, Employee } from '../types';
 import { categoryLabels, categoryColors, productTemplates } from '../data/initialProducts';
-import { getDBState, saveDBState, addProductToDB, addBatchToDB, markdownBatchInDB, addTelemetry, getActiveProductsFromDB } from '../data/databaseState';
+import { createProduct, createBatch, createMarkdown, createWriteoffAct, createWriteoffItems, getActiveProducts, addTelemetry } from '../api/databaseAPI';
 
 interface FreshnessControlProps {
   products: Product[];
@@ -36,7 +36,6 @@ export default function FreshnessControl({ products, setProducts, currentUser }:
     const today = new Date(simulatedToday);
     const expiry = new Date(expiryDateStr);
     
-    // Total days difference
     const diffTime = expiry.getTime() - today.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     
@@ -44,15 +43,13 @@ export default function FreshnessControl({ products, setProducts, currentUser }:
       return { status: 'expired' as const, percent: 0, daysRemaining: diffDays };
     }
     
-    let totalLife = 10; // Default fallback
+    let totalLife = 10;
     if (manufactureDateStr) {
       const manufacture = new Date(manufactureDateStr);
       totalLife = Math.max(1, Math.ceil((expiry.getTime() - manufacture.getTime()) / (1000 * 60 * 60 * 24)));
     }
     
     const percent = Math.min(100, Math.max(0, Math.round((diffDays / totalLife) * 100)));
-    
-    // Expiring soon if within 2 days or less than 25% shelf life remaining
     const expiringSoon = diffDays <= 2 || percent <= 25;
     
     return {
@@ -87,12 +84,12 @@ export default function FreshnessControl({ products, setProducts, currentUser }:
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
-  // Standard Committee names for Russian official TORG-16 Write-off Act
+  // Standard Committee names
   const [inspectorName, setInspectorName] = useState('Копыл И.А. (Практикант)');
   const [managerName, setManagerName] = useState('Иванова А.С. (Директор магазина)');
   const [accountantName, setAccountantName] = useState('Федорова М.В. (Старший бухгалтер)');
 
-  // Role-based approval and integration states
+  // Role-based approval states
   const [isApprovedByDirector, setIsApprovedByDirector] = useState(() => {
     return localStorage.getItem('maria_ra_is_approved_by_director') === 'true';
   });
@@ -123,11 +120,9 @@ export default function FreshnessControl({ products, setProducts, currentUser }:
     }
   }, [currentUser]);
 
-  // Quick auto-populate from scanning template
   const handleScanTemplateChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const idx = Number(e.target.value);
     if (isNaN(idx) || idx < 0) {
-      // Clear form for custom manual entry!
       setNewProduct({
         barcode: '',
         name: '',
@@ -142,14 +137,11 @@ export default function FreshnessControl({ products, setProducts, currentUser }:
     }
     
     const template = productTemplates[idx];
-    
-    // Set realistic expiration dates: e.g. Bakery expires in 3 days, Dairy in 7 days, beverages in 180 days.
     const today = new Date(simulatedToday);
     const mDate = new Date(simulatedToday);
-    mDate.setDate(today.getDate() - 2); // manufactured 2 days ago
-    
+    mDate.setDate(today.getDate() - 2);
     const eDate = new Date(simulatedToday);
-    eDate.setDate(today.getDate() + (template.shelfLifeDays - 2)); // expires soon or fresh
+    eDate.setDate(today.getDate() + (template.shelfLifeDays - 2));
 
     const format = (d: Date) => d.toISOString().split('T')[0];
 
@@ -165,105 +157,151 @@ export default function FreshnessControl({ products, setProducts, currentUser }:
     });
   };
 
-  const handleCreateProduct = (e: React.FormEvent) => {
+  // ==========================================================
+  // ✅ НОВАЯ ФУНКЦИЯ: СОЗДАНИЕ ТОВАРА (Supabase)
+  // ==========================================================
+  const handleCreateProduct = async (e: React.FormEvent) => {
     e.preventDefault();
+    
     if (!newProduct.name || !newProduct.barcode || !newProduct.expirationDate) {
       alert("Пожалуйста, заполните основные поля: Название, Штрихкод и Срок годности!");
       return;
     }
 
-    const dbState = getDBState();
-    let existingProd = dbState.products.find(p => p.barcode === newProduct.barcode);
-    let productId = existingProd?.id;
-    if (!productId) {
-      productId = addProductToDB(
-        newProduct.barcode,
-        newProduct.name,
-        newProduct.category,
-        Number(newProduct.price),
-        7
-      );
-    }
-    
-    addBatchToDB(
-      productId,
-      Number(newProduct.quantity),
-      newProduct.manufactureDate || simulatedToday,
-      newProduct.expirationDate,
-      newProduct.location || 'shelf_1'
-    );
+    try {
+      // 1. Создаём товар в Supabase
+      const product = await createProduct({
+        barcode: newProduct.barcode,
+        name: newProduct.name,
+        category_id: newProduct.category,
+        base_price: Number(newProduct.price),
+        shelf_life_days: 7
+      });
 
-    window.dispatchEvent(new Event('maria_ra_db_updated'));
-    setShowAddModal(false);
-    
-    // Reset form
-    setNewProduct({
-      barcode: '',
-      name: '',
-      category: 'dairy',
-      price: 0,
-      quantity: 1,
-      expirationDate: '',
-      manufactureDate: '',
-      location: ''
-    });
-  };
+      if (!product) {
+        throw new Error('Не удалось создать товар');
+      }
 
-  const applyMarkdown = () => {
-    if (!selectedProduct) return;
-    
-    markdownBatchInDB(selectedProduct.id, currentUser?.id || '1', markdownPercent);
-    window.dispatchEvent(new Event('maria_ra_db_updated'));
-    
-    setShowMarkdownModal(false);
-    setSelectedProduct(null);
-  };
+      // 2. Создаём партию в Supabase
+      await createBatch({
+        product_id: product.id,
+        store_id: 'store_1',
+        quantity: Number(newProduct.quantity),
+        manufacture_date: newProduct.manufactureDate || new Date().toISOString().split('T')[0],
+        expiration_date: newProduct.expirationDate,
+        location_id: newProduct.location || 'shelf_1'
+      });
 
-  const applyWriteOff = () => {
-    if (!selectedProduct) return;
-
-    const state = getDBState();
-    const batch = state.batches.find(b => b.id === selectedProduct.id);
-    if (batch) {
-      batch.is_written_off = true;
-      batch.writeoff_reason = writeOffReason;
+      // 3. Обновляем список товаров
+      const updatedProducts = await getActiveProducts();
+      setProducts(updatedProducts);
       
-      const product = state.products.find(p => p.id === batch.product_id);
-      if (product) {
-        const act_id = `act_${Date.now()}`;
-        const count = state.writeoff_acts.length + 341;
-        const act_number = `АКТ-ТОРГ16-00${count}`;
-        
-        const newAct = {
-          id: act_id,
-          act_number,
-          store_id: 'store_1',
-          created_at: new Date().toISOString(),
-          creator_id: currentUser?.id || '1',
-          approved_by_id: '',
-          is_exported_to_1c: false
-        };
-        state.writeoff_acts.unshift(newAct);
-        
-        state.writeoff_items.push({
-          id: `item_${Date.now()}`,
-          act_id,
-          product_id: product.id,
-          quantity: batch.quantity,
-          reason: writeOffReason,
-          unit_price: product.base_price
-        });
-        
-        addTelemetry(currentUser?.id || '1', 'CREATE_WRITEOFF_ACT', { act_id, items_count: 1 });
+      // 4. Закрываем модалку и сбрасываем форму
+      setShowAddModal(false);
+      setNewProduct({
+        barcode: '',
+        name: '',
+        category: 'dairy',
+        price: 0,
+        quantity: 1,
+        expirationDate: '',
+        manufactureDate: '',
+        location: ''
+      });
+      
+      // 5. Оповещаем другие компоненты об обновлении
+      window.dispatchEvent(new Event('maria_ra_db_updated'));
+      
+    } catch (error) {
+      console.error('❌ Ошибка при создании товара:', error);
+      alert('Не удалось создать товар. Проверьте подключение к базе данных.');
+    }
+  };
+
+  // ==========================================================
+  // ✅ НОВАЯ ФУНКЦИЯ: УЦЕНКА (Supabase)
+  // ==========================================================
+  const applyMarkdown = async () => {
+    if (!selectedProduct) return;
+    
+    try {
+      await createMarkdown({
+        batch_id: selectedProduct.id,
+        employee_id: currentUser?.id || '1',
+        discount_percent: markdownPercent,
+        old_price: selectedProduct.price,
+        new_price: Math.round(selectedProduct.price * (1 - markdownPercent / 100))
+      });
+      
+      await addTelemetry({
+        employee_id: currentUser?.id || '1',
+        action_type: 'MARKDOWN_PRODUCT',
+        payload: { batch_id: selectedProduct.id, discount_percent: markdownPercent }
+      });
+      
+      const updatedProducts = await getActiveProducts();
+      setProducts(updatedProducts);
+      
+      setShowMarkdownModal(false);
+      setSelectedProduct(null);
+      window.dispatchEvent(new Event('maria_ra_db_updated'));
+    } catch (error) {
+      console.error('❌ Ошибка при уценке:', error);
+      alert('Не удалось применить уценку.');
+    }
+  };
+
+  // ==========================================================
+  // ✅ НОВАЯ ФУНКЦИЯ: СПИСАНИЕ (Supabase)
+  // ==========================================================
+  const applyWriteOff = async () => {
+    if (!selectedProduct) return;
+    
+    try {
+      // 1. Создаём акт списания
+      const act = await createWriteoffAct({
+        act_number: `АКТ-ТОРГ16-00${Date.now().toString().slice(-5)}`,
+        store_id: 'store_1',
+        creator_id: currentUser?.id || '1',
+        approved_by_id: null,
+        is_exported_to_1c: false
+      });
+
+      if (!act) {
+        throw new Error('Не удалось создать акт списания');
       }
       
-      saveDBState(state);
+      // 2. Создаём строки списания
+      await createWriteoffItems([{
+        act_id: act.id,
+        product_id: selectedProduct.id,
+        quantity: selectedProduct.quantity,
+        reason: writeOffReason,
+        unit_price: selectedProduct.price
+      }]);
+      
+      await addTelemetry({
+        employee_id: currentUser?.id || '1',
+        action_type: 'CREATE_WRITEOFF_ACT',
+        payload: { act_id: act.id, items_count: 1 }
+      });
+      
+      // 3. Обновляем данные
+      const updatedProducts = await getActiveProducts();
+      setProducts(updatedProducts);
+      
+      setShowWriteOffModal(false);
+      setSelectedProduct(null);
       window.dispatchEvent(new Event('maria_ra_db_updated'));
+    } catch (error) {
+      console.error('❌ Ошибка при списании:', error);
+      alert('Не удалось списать товар.');
     }
-
-    setShowWriteOffModal(false);
-    setSelectedProduct(null);
   };
+
+  // ==========================================================
+  // ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ (не меняются)
+  // ==========================================================
 
   // Status indicators UI builder helper
   const renderStatusBadge = (product: Product) => {
@@ -332,14 +370,12 @@ export default function FreshnessControl({ products, setProducts, currentUser }:
   const totalLossRub = writtenOffProducts.reduce((acc, p) => acc + (p.price * p.quantity), 0);
   const totalMarkdownLossRub = markedDownProducts.reduce((acc, p) => acc + ((p.price - (p.markdownPrice || p.price)) * p.quantity), 0);
 
-  // Expiration Progress Bar percentage
   const getProgressColor = (percent: number) => {
     if (percent <= 25) return 'bg-red-500';
     if (percent <= 50) return 'bg-amber-500';
     return 'bg-green-600';
   };
 
-  // Filter logic
   const filteredProducts = products.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           p.barcode.includes(searchTerm) || 
@@ -362,7 +398,6 @@ export default function FreshnessControl({ products, setProducts, currentUser }:
     return matchesSearch && matchesCategory && matchesStatus;
   });
 
-  // Calculate Loss analytics by category
   const lossesByCategory: Record<ProductCategory, number> = {
     dairy: 0, bakery: 0, meat_sausage: 0, grocery: 0, beverages: 0, confectionery: 0, other: 0
   };
@@ -370,12 +405,13 @@ export default function FreshnessControl({ products, setProducts, currentUser }:
     lossesByCategory[p.category] += p.price * p.quantity;
   });
 
+  // ==========================================================
+  // ВОЗВРАТ JSX (не меняется)
+  // ==========================================================
   return (
     <div className="space-y-6 animate-fade-in">
-
       {/* KPI Dashboard Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 no-print">
-        
         <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-xl p-4 shadow-2xs transition-colors duration-200">
           <div className="flex justify-between items-start">
             <span className="text-[10px] font-extrabold text-gray-400 dark:text-slate-400 uppercase tracking-wider block">В каталоге</span>
@@ -420,48 +456,31 @@ export default function FreshnessControl({ products, setProducts, currentUser }:
           <p className="text-2xl font-black text-white mt-1">{totalLossRub.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-xs font-normal text-gray-400 dark:text-slate-500">₽</span></p>
           <span className="text-[10px] text-red-400 dark:text-red-300 mt-2 block font-bold">-{totalMarkdownLossRub.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽ за счет уценок</span>
         </div>
-
       </div>
 
       {/* Sub tabs for inventory and reports */}
       <div className="flex border-b border-gray-100 dark:border-slate-800 no-print transition-colors duration-200">
         <button
           onClick={() => setActiveSubTab('catalog')}
-          className={`px-5 py-3 text-xs font-bold border-b-2 transition-all ${
-            activeSubTab === 'catalog'
-              ? 'border-green-600 text-green-700 dark:text-green-400'
-              : 'border-transparent text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200'
-          }`}
+          className={`px-5 py-3 text-xs font-bold border-b-2 transition-all ${activeSubTab === 'catalog' ? 'border-green-600 text-green-700 dark:text-green-400' : 'border-transparent text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200'}`}
         >
           Каталог & Контроль Сроков
         </button>
         <button
           onClick={() => setActiveSubTab('writeoffs')}
-          className={`px-5 py-3 text-xs font-bold border-b-2 transition-all ${
-            activeSubTab === 'writeoffs'
-              ? 'border-green-600 text-green-700 dark:text-green-400'
-              : 'border-transparent text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200'
-          }`}
+          className={`px-5 py-3 text-xs font-bold border-b-2 transition-all ${activeSubTab === 'writeoffs' ? 'border-green-600 text-green-700 dark:text-green-400' : 'border-transparent text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200'}`}
         >
           Акт Списания (ТОРГ-16)
         </button>
         <button
           onClick={() => setActiveSubTab('markdown')}
-          className={`px-5 py-3 text-xs font-bold border-b-2 transition-all ${
-            activeSubTab === 'markdown'
-              ? 'border-green-600 text-green-700 dark:text-green-400'
-              : 'border-transparent text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200'
-          }`}
+          className={`px-5 py-3 text-xs font-bold border-b-2 transition-all ${activeSubTab === 'markdown' ? 'border-green-600 text-green-700 dark:text-green-400' : 'border-transparent text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200'}`}
         >
           Журнал Уценки
         </button>
         <button
           onClick={() => setActiveSubTab('analytics')}
-          className={`px-5 py-3 text-xs font-bold border-b-2 transition-all ${
-            activeSubTab === 'analytics'
-              ? 'border-green-600 text-green-700 dark:text-green-400'
-              : 'border-transparent text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200'
-          }`}
+          className={`px-5 py-3 text-xs font-bold border-b-2 transition-all ${activeSubTab === 'analytics' ? 'border-green-600 text-green-700 dark:text-green-400' : 'border-transparent text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200'}`}
         >
           Аналитика Потерь
         </button>
@@ -470,10 +489,7 @@ export default function FreshnessControl({ products, setProducts, currentUser }:
       {/* SUB-TAB 1: PRODUCT CATALOG */}
       {activeSubTab === 'catalog' && (
         <div className="space-y-4 no-print">
-          
-          {/* Filters Bar */}
           <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-xl p-4 shadow-2xs flex flex-col md:flex-row gap-3 transition-colors duration-200">
-            
             <div className="relative flex-1">
               <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-3" />
               <input 
@@ -518,10 +534,8 @@ export default function FreshnessControl({ products, setProducts, currentUser }:
                 <span>Добавить товар</span>
               </button>
             </div>
-
           </div>
 
-          {/* Grid/Table Area */}
           <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-xl shadow-xs overflow-x-auto transition-colors duration-200">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
@@ -546,10 +560,8 @@ export default function FreshnessControl({ products, setProducts, currentUser }:
                   </tr>
                 ) : (
                   filteredProducts.map(product => {
-                    // Calculate live status metrics
                     const isWrittenOff = product.status === 'written_off';
                     const isMarkedDown = product.status === 'marked_down';
-                    
                     const { percent } = isWrittenOff ? { percent: 0 } : calculateStatusAndPercent(product.expirationDate, product.manufactureDate);
                     
                     return (
@@ -574,8 +586,6 @@ export default function FreshnessControl({ products, setProducts, currentUser }:
                             изгот: {product.manufactureDate?.split('-').reverse().join('.') || 'нет данных'}
                           </span>
                         </td>
-                        
-                        {/* Shelf Life Progress Bar */}
                         <td className="px-4 py-4">
                           {isWrittenOff ? (
                             <span className="text-red-500 dark:text-red-400 font-mono text-[10px] font-bold">Снято с полки</span>
@@ -591,11 +601,9 @@ export default function FreshnessControl({ products, setProducts, currentUser }:
                             </div>
                           )}
                         </td>
-
                         <td className="px-4 py-4 text-center font-bold text-gray-800 dark:text-slate-200">
                           {product.quantity} шт.
                         </td>
-
                         <td className="px-4 py-4">
                           {isMarkedDown ? (
                             <div>
@@ -607,12 +615,9 @@ export default function FreshnessControl({ products, setProducts, currentUser }:
                           )}
                           <span className="text-[10px] text-gray-400 dark:text-slate-500 block mt-0.5">итого: {((isMarkedDown ? product.markdownPrice! : product.price) * product.quantity).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽</span>
                         </td>
-
                         <td className="px-4 py-4">
                           {renderStatusBadge(product)}
                         </td>
-
-                        {/* Action buttons */}
                         <td className="px-5 py-4 text-right">
                           <div className="flex justify-end space-x-1.5">
                             {!isWrittenOff && !isMarkedDown && (
@@ -644,7 +649,6 @@ export default function FreshnessControl({ products, setProducts, currentUser }:
                             )}
                           </div>
                         </td>
-
                       </tr>
                     );
                   })
@@ -652,14 +656,12 @@ export default function FreshnessControl({ products, setProducts, currentUser }:
               </tbody>
             </table>
           </div>
-
         </div>
       )}
 
-      {/* SUB-TAB 2: PRINTABLE WRITE-OFF ACT (ТОРГ-16) */}
+      {/* SUB-TAB 2: WRITE-OFF ACT (ТОРГ-16) */}
       {activeSubTab === 'writeoffs' && (
         <div className="space-y-4">
-          
           <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-xl p-4 shadow-2xs no-print flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition-colors duration-200">
             <div>
               <h3 className="text-xs font-extrabold text-gray-900 dark:text-slate-100 uppercase">Официальный Акт о списании (Унифицированная форма № ТОРГ-16)</h3>
@@ -676,7 +678,6 @@ export default function FreshnessControl({ products, setProducts, currentUser }:
             </button>
           </div>
 
-          {/* Role-Specific Interactive Work Deck */}
           <div className="bg-white dark:bg-slate-900 border border-gray-150 dark:border-slate-800 rounded-xl p-5 shadow-2xs no-print transition-colors duration-200">
             <h4 className="text-[11px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest mb-3.5 flex items-center space-x-1.5">
               <Layers className="w-4 h-4 text-green-600 dark:text-green-400" />
@@ -705,10 +706,7 @@ export default function FreshnessControl({ products, setProducts, currentUser }:
                       <span>АКТ ПОЛНОСТЬЮ УТВЕРЖДЕН</span>
                     </span>
                   ) : sentToApproval ? (
-                    <button
-                      disabled
-                      className="px-4 py-2 bg-gray-200 dark:bg-slate-800 text-gray-500 dark:text-slate-400 rounded-lg text-xs font-black uppercase tracking-tight flex items-center space-x-2 border border-transparent"
-                    >
+                    <button disabled className="px-4 py-2 bg-gray-200 dark:bg-slate-800 text-gray-500 dark:text-slate-400 rounded-lg text-xs font-black uppercase tracking-tight flex items-center space-x-2 border border-transparent">
                       <Check className="w-4 h-4 text-amber-500 animate-bounce" />
                       <span>ОТПРАВЛЕНО ДИРЕКТОРУ</span>
                     </button>
@@ -746,11 +744,7 @@ export default function FreshnessControl({ products, setProducts, currentUser }:
                 <div className="space-y-1">
                   <div className="flex items-center space-x-2">
                     <span className={`w-2 h-2 rounded-full ${isApprovedByDirector ? 'bg-emerald-500' : 'bg-rose-500 animate-pulse'}`}></span>
-                    <span className={`text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-sm ${
-                      isApprovedByDirector 
-                        ? 'text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40' 
-                        : 'text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40'
-                    }`}>
+                    <span className={`text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-sm ${isApprovedByDirector ? 'text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40' : 'text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40'}`}>
                       СТАТУС: {isApprovedByDirector ? 'УТВЕРЖДЕНО ЭЦП ДИРЕКТОРА' : 'ОЖИДАЕТ УТВЕРЖДЕНИЯ'}
                     </span>
                   </div>
@@ -786,11 +780,7 @@ export default function FreshnessControl({ products, setProducts, currentUser }:
                 <div className="space-y-1">
                   <div className="flex items-center space-x-2">
                     <span className={`w-2 h-2 rounded-full ${isExportedTo1C ? 'bg-indigo-500' : 'bg-amber-500 animate-pulse'}`}></span>
-                    <span className={`text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-sm ${
-                      isExportedTo1C 
-                        ? 'text-indigo-700 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40' 
-                        : 'text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40'
-                    }`}>
+                    <span className={`text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-sm ${isExportedTo1C ? 'text-indigo-700 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40' : 'text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40'}`}>
                       1C: {isExportedTo1C ? 'ВЫГРУЖЕНО В БУХГАЛТЕРИЮ' : 'ОЖИДАЕТ ПРОВОДОК'}
                     </span>
                   </div>
@@ -819,11 +809,7 @@ export default function FreshnessControl({ products, setProducts, currentUser }:
                         }, 1800);
                       }}
                       disabled={isExporting || !isApprovedByDirector}
-                      className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-tight flex items-center space-x-2 transition-all active:scale-98 shadow-xs ${
-                        !isApprovedByDirector
-                          ? 'bg-gray-100 text-gray-400 dark:bg-slate-800 dark:text-slate-600 border border-gray-200 dark:border-slate-800 cursor-not-allowed'
-                          : 'bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer'
-                      }`}
+                      className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-tight flex items-center space-x-2 transition-all active:scale-98 shadow-xs ${!isApprovedByDirector ? 'bg-gray-100 text-gray-400 dark:bg-slate-800 dark:text-slate-600 border border-gray-200 dark:border-slate-800 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer'}`}
                     >
                       {isExporting ? (
                         <>
@@ -916,7 +902,6 @@ export default function FreshnessControl({ products, setProducts, currentUser }:
 
           {/* TORG-16 Document Preview */}
           <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-xl shadow-xs p-6 md:p-8 overflow-x-auto print-container font-serif text-gray-900 dark:text-slate-100 text-[10px] leading-normal transition-colors duration-200">
-            
             <div className="text-right text-[8px] mb-4 text-gray-500 dark:text-slate-400">
               Унифицированная форма № ТОРГ-16<br/>
               Утверждена постановлением Госкомстата России от 25.12.98 № 132
@@ -1005,7 +990,6 @@ export default function FreshnessControl({ products, setProducts, currentUser }:
             </p>
 
             <div className="relative grid grid-cols-2 gap-x-8 gap-y-4 pt-4 mt-6 border-t border-gray-200 dark:border-slate-800">
-              {/* Official Digital Approval Stamp */}
               {isApprovedByDirector && (
                 <div className="absolute right-6 top-2 border-4 border-double border-emerald-600 text-emerald-600 dark:text-emerald-400 dark:border-emerald-500 font-mono text-[9px] font-black uppercase p-2 rounded-lg rotate-6 bg-white/90 dark:bg-slate-900/90 shadow-sm flex flex-col items-center select-none z-10">
                   <span>Торговая Сеть «Мария-Ра»</span>
@@ -1041,9 +1025,7 @@ export default function FreshnessControl({ products, setProducts, currentUser }:
                 </div>
               </div>
             </div>
-
           </div>
-
         </div>
       )}
 
@@ -1119,10 +1101,7 @@ export default function FreshnessControl({ products, setProducts, currentUser }:
       {/* SUB-TAB 4: LOSS ANALYTICS */}
       {activeSubTab === 'analytics' && (
         <div className="space-y-6 no-print">
-          
-          {/* Custom Role-Based BI and Tax Deck */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            
             <div className="bg-white dark:bg-slate-900 border border-gray-150 dark:border-slate-800 rounded-xl p-4 shadow-2xs transition-colors duration-200">
               <span className="text-[9px] font-black text-green-700 dark:text-green-400 uppercase tracking-widest bg-green-50 dark:bg-green-950/40 px-2 py-0.5 rounded-sm">Списание (ТОРГ-16)</span>
               <div className="text-xl font-black text-gray-950 dark:text-slate-50 mt-2 font-mono">{totalLossRub.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽</div>
@@ -1172,95 +1151,77 @@ export default function FreshnessControl({ products, setProducts, currentUser }:
                 <p className="text-[10px] text-blue-850 dark:text-blue-300 mt-1">Качественная работа с полками минимизировала чистую просрочку на 35%.</p>
               </div>
             )}
-
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            
-            {/* Chart of Losses by Category */}
             <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-xl p-5 shadow-2xs transition-colors duration-200">
               <h3 className="text-xs font-extrabold text-gray-900 dark:text-slate-100 uppercase mb-4">Финансовые потери по категориям товаров (руб)</h3>
-            
-            <div className="space-y-4">
-              {Object.keys(lossesByCategory).map(cat => {
-                const value = lossesByCategory[cat as ProductCategory];
-                const max = Math.max(...Object.values(lossesByCategory), 1);
-                const pct = Math.round((value / max) * 100);
-                
-                return (
-                  <div key={cat} className="space-y-1">
-                    <div className="flex justify-between items-center text-xs font-bold">
-                      <span className="text-gray-700 dark:text-slate-200">{categoryLabels[cat as ProductCategory]}</span>
-                      <span className="text-red-600 dark:text-red-400">{value.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽</span>
+              <div className="space-y-4">
+                {Object.keys(lossesByCategory).map(cat => {
+                  const value = lossesByCategory[cat as ProductCategory];
+                  const max = Math.max(...Object.values(lossesByCategory), 1);
+                  const pct = Math.round((value / max) * 100);
+                  
+                  return (
+                    <div key={cat} className="space-y-1">
+                      <div className="flex justify-between items-center text-xs font-bold">
+                        <span className="text-gray-700 dark:text-slate-200">{categoryLabels[cat as ProductCategory]}</span>
+                        <span className="text-red-600 dark:text-red-400">{value.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽</span>
+                      </div>
+                      <div className="w-full bg-gray-50 dark:bg-slate-800 h-3 rounded-md overflow-hidden border border-gray-100 dark:border-slate-850">
+                        <div className="h-full bg-red-500 rounded-md transition-all duration-500" style={{ width: `${pct}%` }}></div>
+                      </div>
                     </div>
-                    <div className="w-full bg-gray-50 dark:bg-slate-800 h-3 rounded-md overflow-hidden border border-gray-100 dark:border-slate-850">
-                      <div 
-                        className="h-full bg-red-500 rounded-md transition-all duration-500" 
-                        style={{ width: `${pct}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            
-            <p className="text-[10px] text-gray-400 dark:text-slate-400 mt-6 leading-relaxed">
-              *График автоматически строится на основе списаний товаров в акте ТОРГ-16. Позволяет директору магазина принимать управленческие решения об уменьшении объема заказов по проблемным группам товаров.
-            </p>
-          </div>
-
-          {/* Loss prevention tips card */}
-          <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-xl p-5 shadow-2xs flex flex-col justify-between transition-colors duration-200">
-            <div>
-              <h3 className="text-xs font-extrabold text-gray-900 dark:text-slate-100 uppercase mb-3">Эффективность превентивной уценки</h3>
-              <p className="text-xs text-gray-500 dark:text-slate-400 leading-relaxed">
-                Внедрение нашего веб-приложения позволяет заменить медленный бумажный контроль автоматическим календарным планированием:
-              </p>
-              
-              <ul className="space-y-2 mt-4 text-xs text-gray-700 dark:text-slate-300 font-medium">
-                <li className="flex items-center space-x-2.5">
-                  <span className="w-5 h-5 rounded-full bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-300 flex items-center justify-center font-bold text-[10px]">1</span>
-                  <span><b>Сокращение потерь на 45%</b> за счет продажи товаров по скидке вместо полной просрочки.</span>
-                </li>
-                <li className="flex items-center space-x-2.5">
-                  <span className="w-5 h-5 rounded-full bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-300 flex items-center justify-center font-bold text-[10px]">2</span>
-                  <span><b>100% защита от штрафов Роспотребнадзора</b> благодаря исключению человеческого фактора.</span>
-                </li>
-                <li className="flex items-center space-x-2.5">
-                  <span className="w-5 h-5 rounded-full bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-300 flex items-center justify-center font-bold text-[10px]">3</span>
-                  <span><b>Экономия 12 часов рабочего времени</b> сотрудников магазина еженедельно.</span>
-                </li>
-              </ul>
-            </div>
-
-            <div className="bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-100 dark:border-yellow-900/30 rounded-lg p-4 mt-6 transition-colors duration-200">
-              <span className="text-[10px] font-black text-amber-800 dark:text-amber-400 uppercase tracking-wider block">Рекомендация наставника</span>
-              <p className="text-[11px] text-amber-950 dark:text-amber-200 mt-1">
-                Используйте эти цифры и графики в <b>Разделе 3 отчета по практике</b> в качестве доказательства практической ценности разработанной вами программы! Это гарантирует высший балл на защите.
+                  );
+                })}
+              </div>
+              <p className="text-[10px] text-gray-400 dark:text-slate-400 mt-6 leading-relaxed">
+                *График автоматически строится на основе списаний товаров в акте ТОРГ-16. Позволяет директору магазина принимать управленческие решения об уменьшении объема заказов по проблемным группам товаров.
               </p>
             </div>
-          </div>
 
-        </div>
+            <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-xl p-5 shadow-2xs flex flex-col justify-between transition-colors duration-200">
+              <div>
+                <h3 className="text-xs font-extrabold text-gray-900 dark:text-slate-100 uppercase mb-3">Эффективность превентивной уценки</h3>
+                <p className="text-xs text-gray-500 dark:text-slate-400 leading-relaxed">
+                  Внедрение нашего веб-приложения позволяет заменить медленный бумажный контроль автоматическим календарным планированием:
+                </p>
+                <ul className="space-y-2 mt-4 text-xs text-gray-700 dark:text-slate-300 font-medium">
+                  <li className="flex items-center space-x-2.5">
+                    <span className="w-5 h-5 rounded-full bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-300 flex items-center justify-center font-bold text-[10px]">1</span>
+                    <span><b>Сокращение потерь на 45%</b> за счет продажи товаров по скидке вместо полной просрочки.</span>
+                  </li>
+                  <li className="flex items-center space-x-2.5">
+                    <span className="w-5 h-5 rounded-full bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-300 flex items-center justify-center font-bold text-[10px]">2</span>
+                    <span><b>100% защита от штрафов Роспотребнадзора</b> благодаря исключению человеческого фактора.</span>
+                  </li>
+                  <li className="flex items-center space-x-2.5">
+                    <span className="w-5 h-5 rounded-full bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-300 flex items-center justify-center font-bold text-[10px]">3</span>
+                    <span><b>Экономия 12 часов рабочего времени</b> сотрудников магазина еженедельно.</span>
+                  </li>
+                </ul>
+              </div>
+
+              <div className="bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-100 dark:border-yellow-900/30 rounded-lg p-4 mt-6 transition-colors duration-200">
+                <span className="text-[10px] font-black text-amber-800 dark:text-amber-400 uppercase tracking-wider block">Рекомендация наставника</span>
+                <p className="text-[11px] text-amber-950 dark:text-amber-200 mt-1">
+                  Используйте эти цифры и графики в <b>Разделе 3 отчета по практике</b> в качестве доказательства практической ценности разработанной вами программы! Это гарантирует высший балл на защите.
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
-      {/* MODAL DIALOG 1: ADD PRODUCT */}
+      {/* MODALS (оставляем без изменений) */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 no-print">
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-800 shadow-2xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto animate-zoom-in transition-colors duration-200">
-            
             <div className="flex justify-between items-center pb-4 border-b border-gray-100 dark:border-slate-800">
               <h3 className="text-sm font-black text-gray-900 dark:text-slate-100 uppercase">Регистрация и сканирование товара</h3>
-              <button 
-                onClick={() => setShowAddModal(false)}
-                className="text-gray-400 hover:text-gray-900 dark:hover:text-slate-100 font-bold text-lg"
-              >
-                &times;
-              </button>
+              <button onClick={() => setShowAddModal(false)} className="text-gray-400 hover:text-gray-900 dark:hover:text-slate-100 font-bold text-lg">&times;</button>
             </div>
 
-            {/* Scanning Simulator Helper */}
             <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30 rounded-lg p-3 my-4 transition-colors duration-200">
               <label className="block text-[10px] font-extrabold text-amber-950 dark:text-amber-300 uppercase mb-1.5 flex items-center space-x-1">
                 <Sparkles className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 animate-pulse" />
@@ -1281,7 +1242,6 @@ export default function FreshnessControl({ products, setProducts, currentUser }:
             </div>
 
             <form onSubmit={handleCreateProduct} className="space-y-4">
-              
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-extrabold text-gray-600 dark:text-slate-400 uppercase mb-1">Штрихкод товара (EAN-13)</label>
@@ -1392,51 +1352,37 @@ export default function FreshnessControl({ products, setProducts, currentUser }:
                   Внести в систему
                 </button>
               </div>
-
             </form>
-
           </div>
         </div>
       )}
 
-      {/* MODAL DIALOG 2: MARKDOWN ACTION */}
       {showMarkdownModal && selectedProduct && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 no-print">
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-800 shadow-2xl w-full max-w-sm p-6 animate-zoom-in transition-colors duration-200">
             <h3 className="text-sm font-black text-gray-900 dark:text-slate-100 uppercase pb-3 border-b border-gray-100 dark:border-slate-800">Уценка скоропортящегося товара</h3>
-            
             <p className="text-xs text-gray-600 dark:text-slate-400 mt-3 leading-relaxed">
               Вы собираетесь сделать уценку для товара: <b className="text-gray-900 dark:text-slate-100 block mt-1">{selectedProduct.name}</b>
             </p>
-
             <div className="my-4">
               <label className="block text-[10px] font-extrabold text-gray-500 dark:text-slate-400 uppercase mb-2">Выберите размер скидки (уценки):</label>
               <div className="grid grid-cols-2 gap-3">
                 <button
                   onClick={() => setMarkdownPercent(30)}
-                  className={`py-3 rounded-lg text-xs font-extrabold border transition-all ${
-                    markdownPercent === 30
-                      ? 'bg-green-50 dark:bg-green-950/40 border-green-400 dark:border-green-800 text-green-800 dark:text-green-300 font-black'
-                      : 'bg-white dark:bg-slate-800 border-gray-100 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-850'
-                  }`}
+                  className={`py-3 rounded-lg text-xs font-extrabold border transition-all ${markdownPercent === 30 ? 'bg-green-50 dark:bg-green-950/40 border-green-400 dark:border-green-800 text-green-800 dark:text-green-300 font-black' : 'bg-white dark:bg-slate-800 border-gray-100 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-850'}`}
                 >
                   Скидка -30%
                   <span className="block text-[9px] font-normal text-gray-400 dark:text-slate-500 mt-1">Новая цена: {Math.round(selectedProduct.price * 0.7)} ₽</span>
                 </button>
                 <button
                   onClick={() => setMarkdownPercent(50)}
-                  className={`py-3 rounded-lg text-xs font-extrabold border transition-all ${
-                    markdownPercent === 50
-                      ? 'bg-green-50 dark:bg-green-950/40 border-green-400 dark:border-green-800 text-green-800 dark:text-green-300 font-black'
-                      : 'bg-white dark:bg-slate-800 border-gray-100 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-850'
-                  }`}
+                  className={`py-3 rounded-lg text-xs font-extrabold border transition-all ${markdownPercent === 50 ? 'bg-green-50 dark:bg-green-950/40 border-green-400 dark:border-green-800 text-green-800 dark:text-green-300 font-black' : 'bg-white dark:bg-slate-800 border-gray-100 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-850'}`}
                 >
                   Скидка -50%
                   <span className="block text-[9px] font-normal text-gray-400 dark:text-slate-500 mt-1">Новая цена: {Math.round(selectedProduct.price * 0.5)} ₽</span>
                 </button>
               </div>
             </div>
-
             <div className="flex justify-end space-x-2 pt-4 border-t border-gray-100 dark:border-slate-800">
               <button
                 onClick={() => {
@@ -1458,17 +1404,14 @@ export default function FreshnessControl({ products, setProducts, currentUser }:
         </div>
       )}
 
-      {/* MODAL DIALOG 3: WRITE-OFF ACTION */}
       {showWriteOffModal && selectedProduct && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 no-print">
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-800 shadow-2xl w-full max-w-sm p-6 animate-zoom-in transition-colors duration-200">
             <h3 className="text-sm font-black text-gray-900 dark:text-slate-100 uppercase pb-3 border-b border-gray-100 dark:border-slate-800">Списание товара из оборота</h3>
-            
             <p className="text-xs text-gray-600 dark:text-slate-400 mt-3 leading-relaxed">
               Вы списываете с остатков магазина товар: <b className="text-gray-900 dark:text-slate-100 block mt-1">{selectedProduct.name}</b>
               Количество позиций: <b className="text-gray-900 dark:text-slate-100">{selectedProduct.quantity} шт.</b>
             </p>
-
             <div className="my-4">
               <label className="block text-[10px] font-extrabold text-gray-500 dark:text-slate-400 uppercase mb-1.5">Причина снятия с полки:</label>
               <select
@@ -1483,7 +1426,6 @@ export default function FreshnessControl({ products, setProducts, currentUser }:
                 <option value="Нарушение температурного режима">Нарушение условий хранения</option>
               </select>
             </div>
-
             <div className="flex justify-end space-x-2 pt-4 border-t border-gray-100 dark:border-slate-800">
               <button
                 onClick={() => {
@@ -1504,7 +1446,6 @@ export default function FreshnessControl({ products, setProducts, currentUser }:
           </div>
         </div>
       )}
-
     </div>
   );
 }
