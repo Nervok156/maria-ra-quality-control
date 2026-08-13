@@ -7,7 +7,7 @@ import FifoPlan from './components/FifoPlan';
 import DatabaseSchema from './components/DatabaseSchema';
 import RoleWorkspace from './components/RoleWorkspace';
 import { Employee, Product } from './types';
-import { getDBState, getActiveProductsFromDB } from './data/databaseState';
+import { getActiveProducts, getEmployees } from './api/databaseAPI';
 import { 
   Terminal, ShieldCheck, RefreshCw, Database
 } from 'lucide-react';
@@ -26,22 +26,32 @@ export default function App() {
     return null;
   });
   
-  const [products, setProducts] = useState<Product[]>(() => {
-    return getActiveProductsFromDB(getDBState());
-  });
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const handleDbUpdate = () => {
-    setProducts(getActiveProductsFromDB(getDBState()));
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      console.log('📥 Загружаем данные из Supabase...');
+      
+      const activeProducts = await getActiveProducts();
+      console.log('✅ Получено товаров:', activeProducts.length);
+      
+      setProducts(activeProducts);
+    } catch (error) {
+      console.error('❌ Ошибка загрузки данных:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
-    window.addEventListener('maria_ra_db_updated', handleDbUpdate);
-    window.addEventListener('storage', handleDbUpdate);
-    return () => {
-      window.removeEventListener('maria_ra_db_updated', handleDbUpdate);
-      window.removeEventListener('storage', handleDbUpdate);
-    };
+    loadData();
   }, []);
+
+  const handleDbUpdate = () => {
+    loadData();
+  };
 
   const handleLogout = () => {
     setCurrentUser(null);
@@ -56,6 +66,17 @@ export default function App() {
           localStorage.setItem('maria_ra_logged_in_user', JSON.stringify(emp));
         }} 
       />
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-green-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="mt-4 text-gray-500">Загрузка данных...</p>
+        </div>
+      </div>
     );
   }
 
