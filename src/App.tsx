@@ -7,7 +7,12 @@ import FifoPlan from './components/FifoPlan';
 import DatabaseSchema from './components/DatabaseSchema';
 import RoleWorkspace from './components/RoleWorkspace';
 import { Employee, Product } from './types';
-import { getActiveProducts, getEmployees } from './api/databaseAPI';
+import { 
+  getActiveProducts, 
+  getWriteoffActs, 
+  getWriteoffItems, 
+  getMarkdownLog 
+} from './api/databaseAPI';
 import { 
   Terminal, ShieldCheck, RefreshCw, Database
 } from 'lucide-react';
@@ -49,8 +54,8 @@ export default function App() {
     loadData();
   }, []);
 
-  const handleDbUpdate = () => {
-    loadData();
+  const handleDbUpdate = async () => {
+  await loadData();
   };
 
   const handleLogout = () => {
@@ -170,6 +175,7 @@ export default function App() {
               products={products} 
               setProducts={setProducts} 
               currentUser={currentUser}
+              onDataChange={handleDbUpdate}
             />
           )}
           {activeTab === 'fifo' && (

@@ -13,9 +13,10 @@ interface FreshnessControlProps {
   products: Product[];
   setProducts: React.Dispatch<React.SetStateAction<Product[]>>;
   currentUser: Employee;
+  onDataChange: () => Promise<void>;
 }
 
-export default function FreshnessControl({ products, setProducts, currentUser }: FreshnessControlProps) {
+export default function FreshnessControl({ products, setProducts, currentUser, onDataChange }: FreshnessControlProps) {
   const [activeSubTab, setActiveSubTab] = useState<'catalog' | 'writeoffs' | 'markdown' | 'analytics'>(() => {
     const saved = localStorage.getItem('maria_ra_active_sub_tab');
     return (saved as any) || 'catalog';
@@ -152,7 +153,7 @@ export default function FreshnessControl({ products, setProducts, currentUser }:
   };
 
   // ==========================================================
-  // ✅ ОСНОВНАЯ ФУНКЦИЯ: СОЗДАНИЕ ТОВАРА
+  // ✅ СОЗДАНИЕ ТОВАРА
   // ==========================================================
   const handleCreateProduct = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -165,7 +166,6 @@ export default function FreshnessControl({ products, setProducts, currentUser }:
     try {
       const trimmedBarcode = newProduct.barcode.trim();
 
-      // 1. Проверяем, существует ли товар с таким штрихкодом
       const { data: existingProducts, error: searchError } = await supabase
         .from('products')
         .select('id, name, barcode')
@@ -179,11 +179,9 @@ export default function FreshnessControl({ products, setProducts, currentUser }:
       let productId;
 
       if (existingProducts && existingProducts.length > 0) {
-        // ✅ Товар уже существует — используем его ID
         productId = existingProducts[0].id;
         alert(`Товар "${existingProducts[0].name}" уже есть в базе. Добавляем новую партию.`);
       } else {
-        // 2. Создаём новый товар
         const product = await createProduct({
           barcode: trimmedBarcode,
           name: newProduct.name,
@@ -198,7 +196,6 @@ export default function FreshnessControl({ products, setProducts, currentUser }:
         productId = product.id;
       }
 
-      // 3. Создаём партию для этого товара
       await createBatch({
         product_id: productId,
         store_id: 'store_1',
@@ -208,11 +205,8 @@ export default function FreshnessControl({ products, setProducts, currentUser }:
         location_id: newProduct.location || 'shelf_1'
       });
 
-      // 4. Обновляем список товаров
-      const updatedProducts = await getActiveProducts();
-      setProducts(updatedProducts);
+      await onDataChange();
       
-      // 5. Закрываем модалку и сбрасываем форму
       setShowAddModal(false);
       setNewProduct({
         barcode: '',
@@ -225,8 +219,6 @@ export default function FreshnessControl({ products, setProducts, currentUser }:
         location: 'shelf_1'
       });
       
-      window.dispatchEvent(new Event('maria_ra_db_updated'));
-      
     } catch (error) {
       console.error('❌ Ошибка при создании товара:', error);
       alert('Не удалось создать товар. Проверьте подключение к базе данных.');
@@ -234,7 +226,7 @@ export default function FreshnessControl({ products, setProducts, currentUser }:
   };
 
   // ==========================================================
-  // УЦЕНКА
+  // ✅ УЦЕНКА
   // ==========================================================
   const applyMarkdown = async () => {
     if (!selectedProduct) return;
@@ -254,12 +246,10 @@ export default function FreshnessControl({ products, setProducts, currentUser }:
         payload: { batch_id: selectedProduct.id, discount_percent: markdownPercent }
       });
       
-      const updatedProducts = await getActiveProducts();
-      setProducts(updatedProducts);
+      await onDataChange();
       
       setShowMarkdownModal(false);
       setSelectedProduct(null);
-      window.dispatchEvent(new Event('maria_ra_db_updated'));
     } catch (error) {
       console.error('❌ Ошибка при уценке:', error);
       alert('Не удалось применить уценку.');
@@ -267,92 +257,83 @@ export default function FreshnessControl({ products, setProducts, currentUser }:
   };
 
   // ==========================================================
-  // СПИСАНИЕ
+  // ✅ СПИСАНИЕ
   // ==========================================================
-const applyWriteOff = async () => {
-  if (!selectedProduct) return;
-  
-  try {
-    console.log('🔄 Начинаем списание товара:', selectedProduct.id);
+  const applyWriteOff = async () => {
+    if (!selectedProduct) return;
     
-    // 1. Получаем product_id из партии
-    const { data: batchData, error: batchError } = await supabase
-      .from('batches')
-      .select('product_id, quantity')
-      .eq('id', selectedProduct.id)
-      .single();
-    
-    if (batchError || !batchData) {
-      console.error('❌ Ошибка поиска товара для партии:', batchError);
-      alert('Не удалось найти товар для этой партии');
-      return;
-    }
+    try {
+      console.log('🔄 Начинаем списание товара:', selectedProduct.id);
+      
+      const { data: batchData, error: batchError } = await supabase
+        .from('batches')
+        .select('product_id, quantity')
+        .eq('id', selectedProduct.id)
+        .single();
+      
+      if (batchError || !batchData) {
+        console.error('❌ Ошибка поиска товара для партии:', batchError);
+        alert('Не удалось найти товар для этой партии');
+        return;
+      }
 
-    const productId = batchData.product_id;
-    console.log('📦 Найден product_id:', productId);
+      const productId = batchData.product_id;
+      console.log('📦 Найден product_id:', productId);
 
-    // 2. Создаём акт списания
-    const act = await createWriteoffAct({
-      act_number: `АКТ-ТОРГ16-00${Date.now().toString().slice(-5)}`,
-      store_id: 'store_1',
-      creator_id: currentUser?.id || '1',
-      approved_by_id: null,
-      is_exported_to_1c: false
-    });
+      const act = await createWriteoffAct({
+        act_number: `АКТ-ТОРГ16-00${Date.now().toString().slice(-5)}`,
+        store_id: 'store_1',
+        creator_id: currentUser?.id || '1',
+        approved_by_id: null,
+        is_exported_to_1c: false
+      });
 
-    if (!act) {
-      throw new Error('Не удалось создать акт списания');
+      if (!act) {
+        throw new Error('Не удалось создать акт списания');
+      }
+      console.log('✅ Создан акт:', act.id);
+      
+      await createWriteoffItems([{
+        act_id: act.id,
+        product_id: productId,
+        quantity: selectedProduct.quantity,
+        reason: writeOffReason,
+        unit_price: selectedProduct.price
+      }]);
+      console.log('✅ Созданы строки списания');
+      
+      const { error: updateError } = await supabase
+        .from('batches')
+        .update({ 
+          is_written_off: true,
+          writeoff_reason: writeOffReason
+        })
+        .eq('id', selectedProduct.id);
+      
+      if (updateError) {
+        console.error('❌ Ошибка обновления партии:', updateError);
+        alert('Ошибка при обновлении партии: ' + updateError.message);
+        return;
+      }
+      console.log('✅ Партия помечена как списанная');
+      
+      await addTelemetry({
+        employee_id: currentUser?.id || '1',
+        action_type: 'CREATE_WRITEOFF_ACT',
+        payload: { act_id: act.id, items_count: 1 }
+      });
+      
+      await onDataChange();
+      
+      setShowWriteOffModal(false);
+      setSelectedProduct(null);
+      
+      alert('✅ Товар успешно списан! Акт ТОРГ-16 создан.');
+    } catch (error) {
+      console.error('❌ Ошибка при списании:', error);
+      alert('Не удалось списать товар: ' + (error as any).message);
     }
-    console.log('✅ Создан акт:', act.id);
-    
-    // 3. Создаём строки списания
-    await createWriteoffItems([{
-      act_id: act.id,
-      product_id: productId,
-      quantity: selectedProduct.quantity,
-      reason: writeOffReason,
-      unit_price: selectedProduct.price
-    }]);
-    console.log('✅ Созданы строки списания');
-    
-    // ✅ 4. ОБНОВЛЯЕМ ПАРТИЮ — помечаем как списанную
-    const { error: updateError } = await supabase
-      .from('batches')
-      .update({ 
-        is_written_off: true,
-        writeoff_reason: writeOffReason
-      })
-      .eq('id', selectedProduct.id);
-    
-    if (updateError) {
-      console.error('❌ Ошибка обновления партии:', updateError);
-      alert('Ошибка при обновлении партии: ' + updateError.message);
-      return;
-    }
-    console.log('✅ Партия помечена как списанная');
-    
-    await addTelemetry({
-      employee_id: currentUser?.id || '1',
-      action_type: 'CREATE_WRITEOFF_ACT',
-      payload: { act_id: act.id, items_count: 1 }
-    });
-    
-    // 5. Принудительно обновляем данные
-    console.log('🔄 Обновляем список товаров...');
-    const updatedProducts = await getActiveProducts();
-    console.log('✅ Получено товаров после списания:', updatedProducts.length);
-    setProducts(updatedProducts);
-    
-    setShowWriteOffModal(false);
-    setSelectedProduct(null);
-    window.dispatchEvent(new Event('maria_ra_db_updated'));
-    
-    alert('✅ Товар успешно списан! Акт ТОРГ-16 создан.');
-  } catch (error) {
-    console.error('❌ Ошибка при списании:', error);
-    alert('Не удалось списать товар: ' + (error as any).message);
-  }
-};
+  };
 
   // ==========================================================
   // РЕНДЕР СТАТУСОВ
@@ -714,7 +695,6 @@ const applyWriteOff = async () => {
         </div>
       )}
 
-      {/* Остальные вкладки (writeoffs, markdown, analytics) оставляем без изменений */}
       {/* SUB-TAB 2: WRITE-OFFS */}
       {activeSubTab === 'writeoffs' && (
         <div className="space-y-4">
