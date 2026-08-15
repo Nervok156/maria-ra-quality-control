@@ -27,7 +27,8 @@ import {
   getAuditLogs,
   getPriceHistory,
   getTelemetry,
-  getEmployeeSchedules
+  getEmployeeSchedules,
+  recordSaleInSupabase
 } from '../api/databaseAPI';
 
 interface RoleWorkspaceProps {
@@ -147,7 +148,7 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
   useEffect(() => {
     if (!salesSimulationActive) return;
     
-    const interval = setInterval(() => {
+    const interval = setInterval(async () => {  // ← добавить async
       const state = getDBState();
       const activeBatches = state.batches.filter(b => b.quantity > 0);
       if (activeBatches.length === 0) {
@@ -166,9 +167,9 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
       const markdown = state.markdown_log.find(m => m.batch_id === randomBatch.id);
       const price = markdown ? markdown.new_price : prod.base_price;
       
-      const success = recordSaleInDB(prod.id, buyQty, price, randomBatch.id);
+      const success = await recordSaleInSupabase(prod.id, buyQty, price, randomBatch.id);
       if (success) {
-        triggerUpdate();
+        await triggerUpdate();
         const text = `Покупатель приобрел: ${prod.name} [${buyQty} шт.] за ${(buyQty * price).toFixed(2)} ₽`;
         setLiveSalesJournal(prev => [
           { id: `j_${Date.now()}`, text, time: new Date().toLocaleTimeString('ru-RU') },
@@ -413,7 +414,7 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
     const markdown = dbState.markdown_log.find(m => m.batch_id === batch.id);
     const price = markdown ? markdown.new_price : prod.base_price;
     
-    const success = recordSaleInDB(prod.id, qty, price, batch.id);
+    const success = await recordSaleInSupabase(prod.id, qty, price, batch.id);
     if (success) {
       setPosQty('1');
       setPosSelectedBatch('');

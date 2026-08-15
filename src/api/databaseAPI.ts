@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabaseClient';
 import { Product, ProductCategory } from '../types';
+
 // ==========================================================
 // 1. РАБОТА С КАТЕГОРИЯМИ
 // ==========================================================
@@ -575,5 +576,77 @@ export async function getActiveProducts() {
   } catch (error) {
     console.error('❌ Ошибка получения активных товаров:', error);
     throw error;
+  }
+}
+
+// ==========================================================
+// 20. ✅ НОВАЯ ФУНКЦИЯ: ЗАПИСЬ ПРОДАЖИ В SUPABASE
+// ==========================================================
+export async function recordSaleInSupabase(productId: string, quantity: number, unitPrice: number, batchId: string) {
+  try {
+    console.log('🔄 Записываем продажу в Supabase...');
+    console.log(`📦 Товар: ${productId}, Кол-во: ${quantity}, Цена: ${unitPrice}, Партия: ${batchId}`);
+
+    // 1. Проверяем, есть ли такая партия
+    const { data: batch, error: batchError } = await supabase
+      .from('batches')
+      .select('quantity')
+      .eq('id', batchId)
+      .single();
+    
+    if (batchError) {
+      console.error('❌ Ошибка поиска партии:', batchError);
+      return false;
+    }
+
+    if (!batch || batch.quantity < quantity) {
+      console.error('❌ Недостаточно товара на полке');
+      return false;
+    }
+
+    // 2. Обновляем количество в партии
+    const newQuantity = batch.quantity - quantity;
+    const { error: updateError } = await supabase
+      .from('batches')
+      .update({ quantity: newQuantity })
+      .eq('id', batchId);
+    
+    if (updateError) {
+      console.error('❌ Ошибка обновления партии:', updateError);
+      return false;
+    }
+
+    // 3. Если количество стало 0, помечаем партию как распроданную
+    if (newQuantity <= 0) {
+      await supabase
+        .from('batches')
+        .update({ is_written_off: true })
+        .eq('id', batchId);
+      console.log('📦 Партия полностью распродана');
+    }
+
+    // 4. Записываем продажу в sales_log
+    const totalSum = quantity * unitPrice;
+    const { error: saleError } = await supabase
+      .from('sales_log')
+      .insert([{
+        id: `sale_${Date.now()}`,
+        product_id: productId,
+        quantity: quantity,
+        unit_price: unitPrice,
+        total_sum: totalSum,
+        sold_at: new Date().toISOString()
+      }]);
+    
+    if (saleError) {
+      console.error('❌ Ошибка записи продажи:', saleError);
+      return false;
+    }
+
+    console.log(`✅ Продажа записана: ${quantity} шт. на сумму ${totalSum.toFixed(2)} ₽`);
+    return true;
+  } catch (error) {
+    console.error('❌ Ошибка при записи продажи:', error);
+    return false;
   }
 }
