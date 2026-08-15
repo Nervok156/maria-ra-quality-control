@@ -273,10 +273,12 @@ const applyWriteOff = async () => {
   if (!selectedProduct) return;
   
   try {
-    // 1. Находим товар (product) по ID партии
+    console.log('🔄 Начинаем списание товара:', selectedProduct.id);
+    
+    // 1. Получаем product_id из партии
     const { data: batchData, error: batchError } = await supabase
       .from('batches')
-      .select('product_id')
+      .select('product_id, quantity')
       .eq('id', selectedProduct.id)
       .single();
     
@@ -287,6 +289,7 @@ const applyWriteOff = async () => {
     }
 
     const productId = batchData.product_id;
+    console.log('📦 Найден product_id:', productId);
 
     // 2. Создаём акт списания
     const act = await createWriteoffAct({
@@ -300,6 +303,7 @@ const applyWriteOff = async () => {
     if (!act) {
       throw new Error('Не удалось создать акт списания');
     }
+    console.log('✅ Создан акт:', act.id);
     
     // 3. Создаём строки списания
     await createWriteoffItems([{
@@ -309,6 +313,7 @@ const applyWriteOff = async () => {
       reason: writeOffReason,
       unit_price: selectedProduct.price
     }]);
+    console.log('✅ Созданы строки списания');
     
     // ✅ 4. ОБНОВЛЯЕМ ПАРТИЮ — помечаем как списанную
     const { error: updateError } = await supabase
@@ -321,7 +326,10 @@ const applyWriteOff = async () => {
     
     if (updateError) {
       console.error('❌ Ошибка обновления партии:', updateError);
+      alert('Ошибка при обновлении партии: ' + updateError.message);
+      return;
     }
+    console.log('✅ Партия помечена как списанная');
     
     await addTelemetry({
       employee_id: currentUser?.id || '1',
@@ -329,8 +337,10 @@ const applyWriteOff = async () => {
       payload: { act_id: act.id, items_count: 1 }
     });
     
-    // 5. Обновляем данные
+    // 5. Принудительно обновляем данные
+    console.log('🔄 Обновляем список товаров...');
     const updatedProducts = await getActiveProducts();
+    console.log('✅ Получено товаров после списания:', updatedProducts.length);
     setProducts(updatedProducts);
     
     setShowWriteOffModal(false);
@@ -340,7 +350,7 @@ const applyWriteOff = async () => {
     alert('✅ Товар успешно списан! Акт ТОРГ-16 создан.');
   } catch (error) {
     console.error('❌ Ошибка при списании:', error);
-    alert('Не удалось списать товар.');
+    alert('Не удалось списать товар: ' + (error as any).message);
   }
 };
 
