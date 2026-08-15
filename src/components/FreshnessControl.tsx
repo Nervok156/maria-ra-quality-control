@@ -269,7 +269,7 @@ export default function FreshnessControl({ products, setProducts, currentUser }:
   // ==========================================================
   // СПИСАНИЕ
   // ==========================================================
-  const applyWriteOff = async () => {
+const applyWriteOff = async () => {
   if (!selectedProduct) return;
   
   try {
@@ -287,7 +287,6 @@ export default function FreshnessControl({ products, setProducts, currentUser }:
     }
 
     const productId = batchData.product_id;
-    console.log('📦 Найден product_id:', productId);
 
     // 2. Создаём акт списания
     const act = await createWriteoffAct({
@@ -302,14 +301,27 @@ export default function FreshnessControl({ products, setProducts, currentUser }:
       throw new Error('Не удалось создать акт списания');
     }
     
-    // 3. Создаём строки списания с правильным product_id
+    // 3. Создаём строки списания
     await createWriteoffItems([{
       act_id: act.id,
-      product_id: productId,  // ← теперь правильный ID товара
+      product_id: productId,
       quantity: selectedProduct.quantity,
       reason: writeOffReason,
       unit_price: selectedProduct.price
     }]);
+    
+    // ✅ 4. ОБНОВЛЯЕМ ПАРТИЮ — помечаем как списанную
+    const { error: updateError } = await supabase
+      .from('batches')
+      .update({ 
+        is_written_off: true,
+        writeoff_reason: writeOffReason
+      })
+      .eq('id', selectedProduct.id);
+    
+    if (updateError) {
+      console.error('❌ Ошибка обновления партии:', updateError);
+    }
     
     await addTelemetry({
       employee_id: currentUser?.id || '1',
@@ -317,7 +329,7 @@ export default function FreshnessControl({ products, setProducts, currentUser }:
       payload: { act_id: act.id, items_count: 1 }
     });
     
-    // 4. Обновляем данные
+    // 5. Обновляем данные
     const updatedProducts = await getActiveProducts();
     setProducts(updatedProducts);
     
@@ -328,7 +340,7 @@ export default function FreshnessControl({ products, setProducts, currentUser }:
     alert('✅ Товар успешно списан! Акт ТОРГ-16 создан.');
   } catch (error) {
     console.error('❌ Ошибка при списании:', error);
-    alert('Не удалось списать товар. Проверьте подключение к базе данных.');
+    alert('Не удалось списать товар.');
   }
 };
 
