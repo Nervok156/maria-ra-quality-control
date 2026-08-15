@@ -270,46 +270,67 @@ export default function FreshnessControl({ products, setProducts, currentUser }:
   // СПИСАНИЕ
   // ==========================================================
   const applyWriteOff = async () => {
-    if (!selectedProduct) return;
+  if (!selectedProduct) return;
+  
+  try {
+    // 1. Находим товар (product) по ID партии
+    const { data: batchData, error: batchError } = await supabase
+      .from('batches')
+      .select('product_id')
+      .eq('id', selectedProduct.id)
+      .single();
     
-    try {
-      const act = await createWriteoffAct({
-        act_number: `АКТ-ТОРГ16-00${Date.now().toString().slice(-5)}`,
-        store_id: 'store_1',
-        creator_id: currentUser?.id || '1',
-        approved_by_id: null,
-        is_exported_to_1c: false
-      });
-
-      if (!act) {
-        throw new Error('Не удалось создать акт списания');
-      }
-      
-      await createWriteoffItems([{
-        act_id: act.id,
-        product_id: selectedProduct.id,
-        quantity: selectedProduct.quantity,
-        reason: writeOffReason,
-        unit_price: selectedProduct.price
-      }]);
-      
-      await addTelemetry({
-        employee_id: currentUser?.id || '1',
-        action_type: 'CREATE_WRITEOFF_ACT',
-        payload: { act_id: act.id, items_count: 1 }
-      });
-      
-      const updatedProducts = await getActiveProducts();
-      setProducts(updatedProducts);
-      
-      setShowWriteOffModal(false);
-      setSelectedProduct(null);
-      window.dispatchEvent(new Event('maria_ra_db_updated'));
-    } catch (error) {
-      console.error('❌ Ошибка при списании:', error);
-      alert('Не удалось списать товар.');
+    if (batchError || !batchData) {
+      console.error('❌ Ошибка поиска товара для партии:', batchError);
+      alert('Не удалось найти товар для этой партии');
+      return;
     }
-  };
+
+    const productId = batchData.product_id;
+    console.log('📦 Найден product_id:', productId);
+
+    // 2. Создаём акт списания
+    const act = await createWriteoffAct({
+      act_number: `АКТ-ТОРГ16-00${Date.now().toString().slice(-5)}`,
+      store_id: 'store_1',
+      creator_id: currentUser?.id || '1',
+      approved_by_id: null,
+      is_exported_to_1c: false
+    });
+
+    if (!act) {
+      throw new Error('Не удалось создать акт списания');
+    }
+    
+    // 3. Создаём строки списания с правильным product_id
+    await createWriteoffItems([{
+      act_id: act.id,
+      product_id: productId,  // ← теперь правильный ID товара
+      quantity: selectedProduct.quantity,
+      reason: writeOffReason,
+      unit_price: selectedProduct.price
+    }]);
+    
+    await addTelemetry({
+      employee_id: currentUser?.id || '1',
+      action_type: 'CREATE_WRITEOFF_ACT',
+      payload: { act_id: act.id, items_count: 1 }
+    });
+    
+    // 4. Обновляем данные
+    const updatedProducts = await getActiveProducts();
+    setProducts(updatedProducts);
+    
+    setShowWriteOffModal(false);
+    setSelectedProduct(null);
+    window.dispatchEvent(new Event('maria_ra_db_updated'));
+    
+    alert('✅ Товар успешно списан! Акт ТОРГ-16 создан.');
+  } catch (error) {
+    console.error('❌ Ошибка при списании:', error);
+    alert('Не удалось списать товар. Проверьте подключение к базе данных.');
+  }
+};
 
   // ==========================================================
   // РЕНДЕР СТАТУСОВ
