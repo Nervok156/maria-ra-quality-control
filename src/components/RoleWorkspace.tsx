@@ -14,7 +14,7 @@ import {
 
 interface RoleWorkspaceProps {
   currentUser: { id: string; name: string; role: string };
-  onDbUpdate: () => void;
+  onDbUpdate: () => Promise<void>;
 }
 
 export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspaceProps) {
@@ -22,7 +22,7 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
   
   // States for Director workspace
   const [newEmpName, setNewEmpName] = useState('');
-  const [newEmpRole, setNewEmpRole] = useState('role_tra'); // default to cashier
+  const [newEmpRole, setNewEmpRole] = useState('role_tra');
   const [newEmpPersNum, setNewEmpPersNum] = useState('');
   const [selectedScheduleDay, setSelectedScheduleDay] = useState<'today' | 'tomorrow'>('today');
   
@@ -30,19 +30,19 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
   const [priceChangeProduct, setPriceChangeProduct] = useState('');
   const [priceChangeNewPrice, setPriceChangeNewPrice] = useState('');
 
-  // States for Senior Commodity Manager (Supply Ingestion)
+  // States for Senior Commodity Manager
   const [selectedSupplier, setSelectedSupplier] = useState('');
   const [selectedProduct, setSelectedProduct] = useState('');
   const [supplyQty, setSupplyQty] = useState('');
   const [supplyManDate, setSupplyManDate] = useState('');
   const [supplyExpDate, setSupplyExpDate] = useState('');
-  const [supplyLocation, setSupplyLocation] = useState('shelf_1'); // default to shelf 1
+  const [supplyLocation, setSupplyLocation] = useState('shelf_1');
   
   // States for Cashier & Live POS simulation
   const [tsdSelectedProduct, setTsdSelectedProduct] = useState('');
   const [tsdStatusMessage, setTsdStatusMessage] = useState<string | null>(null);
   
-  // New States for POS terminal
+  // States for POS terminal
   const [posSelectedBatch, setPosSelectedBatch] = useState('');
   const [posQty, setPosQty] = useState('1');
   const [salesSimulationActive, setSalesSimulationActive] = useState(false);
@@ -68,7 +68,6 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
     
     const interval = setInterval(() => {
       const state = getDBState();
-      // Filter batches that have actual quantity
       const activeBatches = state.batches.filter(b => b.quantity > 0);
       if (activeBatches.length === 0) {
         setSalesSimulationActive(false);
@@ -100,20 +99,19 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
     return () => clearInterval(interval);
   }, [salesSimulationActive]);
 
-  const handleUpdateSchedule = (employeeId: string, shiftName: string, status: string) => {
+  const handleUpdateSchedule = async (employeeId: string, shiftName: string, status: string) => {
     updateEmployeeScheduleInDB(currentUser.id, employeeId, selectedScheduleDay, shiftName, status);
-    triggerUpdate();
+    await triggerUpdate();
   };
 
-  const triggerUpdate = () => {
-    onDbUpdate();
+  const triggerUpdate = async () => {
+    await onDbUpdate();
     refreshLocalState();
-    // Dispatch global storage event for other components
     window.dispatchEvent(new Event('maria_ra_db_updated'));
   };
 
   // --- DIRECTOR ACTIONS ---
-  const handleHireEmployee = (e: React.FormEvent) => {
+  const handleHireEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newEmpName || !newEmpPersNum) {
       alert("Пожалуйста, заполните ФИО и табельный номер!");
@@ -135,14 +133,13 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
     saveDBState(newState);
     addTelemetry(currentUser.id, 'HIRE_EMPLOYEE', { employee_name: newEmpName, personnel_number: newEmpPersNum });
     
-    // Reset Form
     setNewEmpName('');
     setNewEmpPersNum('');
-    triggerUpdate();
+    await triggerUpdate();
     alert(`Сотрудник ${newEmpName} успешно зачислен в штат розничной точки №142!`);
   };
 
-  const handleFireEmployee = (empId: string, empName: string) => {
+  const handleFireEmployee = async (empId: string, empName: string) => {
     if (empId === currentUser.id) {
       alert("Вы не можете уволить сами себя!");
       return;
@@ -154,26 +151,26 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
         emp.is_active = false;
         saveDBState(newState);
         addTelemetry(currentUser.id, 'DEACTIVATE_EMPLOYEE', { employee_id: empId, name: empName });
-        triggerUpdate();
+        await triggerUpdate();
         alert(`Сотрудник ${empName} переведен в архив штатного расписания.`);
       }
     }
   };
 
-  const handleApproveAct = (actId: string, actNum: string) => {
+  const handleApproveAct = async (actId: string, actNum: string) => {
     approveActInDB(actId, currentUser.id);
-    triggerUpdate();
+    await triggerUpdate();
     alert(`Акт ${actNum} успешно заверен усиленной ЭЦП директора Ивановой А.С. и передан в бухгалтерию!`);
   };
 
   // --- ACCOUNTANT ACTIONS ---
-  const handleExecute1C = (actId: string) => {
+  const handleExecute1C = async (actId: string) => {
     syncActTo1CInDB(actId, currentUser.id);
-    triggerUpdate();
+    await triggerUpdate();
     alert("Проводки успешно экспортированы в 1С:Предприятие 8.3! Сформированы дебетовые ордера по сч.94.");
   };
 
-  const handleChangeProductPrice = (e: React.FormEvent) => {
+  const handleChangeProductPrice = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!priceChangeProduct || !priceChangeNewPrice) {
       alert("Выберите товар и укажите цену!");
@@ -187,7 +184,6 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
       const newPrice = parseFloat(priceChangeNewPrice);
       prod.base_price = newPrice;
       
-      // Добавляем в историю цен
       newState.price_history.unshift({
         id: `ph_${Date.now()}`,
         product_id: priceChangeProduct,
@@ -201,13 +197,13 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
       
       setPriceChangeProduct('');
       setPriceChangeNewPrice('');
-      triggerUpdate();
+      await triggerUpdate();
       alert(`Ценник на «${prod.name}» успешно обновлен на кассах. Старая цена: ${oldPrice} руб., Новая цена: ${newPrice} руб.`);
     }
   };
 
   // --- COMMODITY MANAGER ACTIONS ---
-  const handleIngestSupply = (e: React.FormEvent) => {
+  const handleIngestSupply = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedSupplier || !selectedProduct || !supplyQty || !supplyExpDate) {
       alert("Заполните все обязательные поля поставки!");
@@ -218,12 +214,11 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
     const prod = dbState.products.find(p => p.id === selectedProduct);
     if (!prod) return;
     
-    const totalSum = qty * prod.base_price * 0.7; // Себестоимость ~70% от розничной
+    const totalSum = qty * prod.base_price * 0.7;
     
     const newState = { ...dbState };
     const deliveryId = `del_${Date.now()}`;
     
-    // 1. Добавляем поставку в накладные
     newState.deliveries.unshift({
       id: deliveryId,
       supplier_id: selectedSupplier,
@@ -233,7 +228,6 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
       total_sum: parseFloat(totalSum.toFixed(2))
     });
     
-    // 2. Создаем новую партию на полках
     const batchId = `batch_${Date.now()}`;
     newState.batches.unshift({
       id: batchId,
@@ -249,25 +243,23 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
     saveDBState(newState);
     addTelemetry(currentUser.id, 'RECEIVE_DELIVERY', { delivery_id: deliveryId, product: prod.name, qty });
     
-    // Reset Form
     setSelectedSupplier('');
     setSelectedProduct('');
     setSupplyQty('');
     setSupplyManDate('');
     setSupplyExpDate('');
-    triggerUpdate();
+    await triggerUpdate();
     
     alert(`Поставка успешно оприходована! На полку выложено ${qty} шт. товара «${prod.name}» в зону выкладки.`);
   };
 
   // --- TRAINEE ACTIONS ---
-  const handleTsdMarkdown = (percent: number) => {
+  const handleTsdMarkdown = async (percent: number) => {
     if (!tsdSelectedProduct) {
       alert("Сначала отсканируйте/выберите товар на ТСД!");
       return;
     }
     
-    // Ищем партию этого товара на полке
     const batch = dbState.batches.find(b => b.product_id === tsdSelectedProduct);
     if (!batch) {
       alert("На полках магазина не найдено активных партий этого товара для уценки!");
@@ -275,14 +267,14 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
     }
     
     markdownBatchInDB(batch.id, currentUser.id, percent);
-    triggerUpdate();
+    await triggerUpdate();
     
     const prod = dbState.products.find(p => p.id === tsdSelectedProduct);
     setTsdStatusMessage(`✓ ТСД-СИГНАЛ: Напечатан ценник -${percent}% на «${prod?.name}». Новая цена: ${(prod!.base_price * (1 - percent/100)).toFixed(2)} руб.`);
     setTimeout(() => setTsdStatusMessage(null), 7000);
   };
 
-  const handleTsdWriteOff = () => {
+  const handleTsdWriteOff = async () => {
     if (!tsdSelectedProduct) {
       alert("Сначала отсканируйте/выберите товар на ТСД!");
       return;
@@ -297,7 +289,6 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
     const prod = dbState.products.find(p => p.id === tsdSelectedProduct);
     if (!prod) return;
     
-    // Создаем строку списания
     const items = [{
       product_id: prod.id,
       quantity: batch.quantity,
@@ -307,19 +298,17 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
     
     createWriteoffActInDB(currentUser.id, items);
     
-    // Удаляем партию с полок (утилизируем)
     const newState = { ...dbState };
     newState.batches = newState.batches.filter(b => b.id !== batch.id);
     saveDBState(newState);
     
-    triggerUpdate();
+    await triggerUpdate();
     setTsdSelectedProduct('');
     setTsdStatusMessage(`✓ ТСД-СИГНАЛ: Товар «${prod.name}» в количестве ${batch.quantity} шт. списан с полок в проект Акта ТОРГ-16.`);
     setTimeout(() => setTsdStatusMessage(null), 7000);
   };
 
-
-  const handleManualSale = (e: React.FormEvent) => {
+  const handleManualSale = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!posSelectedBatch) {
       alert("Выберите товарную партию со стоком на полках!");
@@ -347,7 +336,7 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
     if (success) {
       setPosQty('1');
       setPosSelectedBatch('');
-      triggerUpdate();
+      await triggerUpdate();
       
       const text = `Ручная продажа на кассе: ${prod.name} [${qty} шт.] на сумму ${(qty * price).toFixed(2)} ₽`;
       setLiveSalesJournal(prev => [
@@ -357,7 +346,9 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
     }
   };
 
-
+  // ==========================================================
+  // JSX
+  // ==========================================================
   return (
     <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-2xl p-5 md:p-6 shadow-sm mb-6 transition-all no-print">
       
@@ -384,9 +375,8 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
 
       {/* --- RENDER 1: DIRECTOR WORKSPACE --- */}
       {currentUser.role === 'Директор магазина' && (() => {
-        // Calculate P&L figures
         const totalRevenue = dbState.sales_log?.reduce((sum, s) => sum + s.total_sum, 0) || 0;
-        const totalCogs = totalRevenue * 0.6; // wholesale cost of goods ~ 60%
+        const totalCogs = totalRevenue * 0.6;
         
         const approvedActs = dbState.writeoff_acts.filter(act => act.approved_by_id);
         const totalWriteoffLosses = dbState.writeoff_items
@@ -497,7 +487,6 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
                       <span>График рабочих смен персонала</span>
                     </h5>
                     
-                    {/* Day Selector Tabs */}
                     <div className="bg-gray-200 dark:bg-slate-800 p-0.5 rounded-lg flex space-x-1">
                       <button
                         onClick={() => setSelectedScheduleDay('today')}
@@ -518,7 +507,6 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
                     Планирование выходов сотрудников розницы (5 человек, 2 рабочие смены). Изменения пишутся в СУБД-таблицу <span className="font-mono text-emerald-600 dark:text-emerald-400">employee_schedules</span>.
                   </p>
 
-                  {/* Schedules Table */}
                   <div className="space-y-2 mb-4">
                     {dbState.employees.filter(e => e.is_active).map(emp => {
                       const sched = dbState.employee_schedules?.find(s => s.employee_id === emp.id && s.day_type === selectedScheduleDay);
@@ -533,7 +521,6 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
                           </div>
 
                           <div className="flex items-center space-x-2 w-full sm:w-auto justify-between sm:justify-end">
-                            {/* Shift Badge Indicator */}
                             <span className={`px-1.5 py-0.5 text-[9px] font-black uppercase rounded ${
                               currentStatus === 'Выходной' 
                                 ? 'bg-gray-100 text-gray-500 dark:bg-slate-800 dark:text-slate-400' 
@@ -544,7 +531,6 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
                               {currentStatus === 'Выходной' ? 'Выходной' : currentShift.split(' ')[0]}
                             </span>
 
-                            {/* Dropdown to re-schedule */}
                             <select
                               value={currentStatus === 'Выходной' ? 'off' : currentShift}
                               onChange={(e) => {
@@ -570,7 +556,6 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
                   </div>
                 </div>
 
-                {/* Sub Hiring Form if they want to expand */}
                 <form onSubmit={handleHireEmployee} className="space-y-2 bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 p-2.5 rounded-lg">
                   <span className="text-[9px] font-black text-gray-400 dark:text-slate-500 uppercase block">Принять нового работника в штат</span>
                   <div className="grid grid-cols-2 gap-1.5">
@@ -634,7 +619,6 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
                         <span className="text-gray-700 dark:text-slate-300">150 000 ₽</span>
                       </div>
                       
-                      {/* Progress Bar */}
                       {(() => {
                         const lossPercent = Math.min(100, Math.round((totalWriteoffLosses / 150000) * 100));
                         return (
@@ -672,7 +656,6 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
                   </p>
                 </div>
 
-                {/* Acts waiting signature */}
                 <div className="space-y-1.5 max-h-44 overflow-y-auto custom-scrollbar flex-1">
                   {dbState.writeoff_acts.filter(a => !a.approved_by_id).length === 0 ? (
                     <div className="text-center py-8 text-gray-400 italic text-xs">
@@ -713,7 +696,6 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
       {currentUser.role === 'Старший бухгалтер' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
-          {/* Box 1: 1C Synchronization */}
           <div className="bg-gray-50/50 dark:bg-slate-850/40 border border-gray-150 dark:border-slate-800/80 rounded-xl p-4 flex flex-col justify-between">
             <div>
               <h5 className="text-[11px] font-black text-gray-900 dark:text-slate-100 uppercase tracking-wider mb-2 flex items-center space-x-1.5">
@@ -755,7 +737,6 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
             </div>
           </div>
 
-          {/* Box 2: Profit Tax optimization (Art. 265 Tax Code of RF) */}
           <div className="bg-gray-50/50 dark:bg-slate-850/40 border border-gray-150 dark:border-slate-800/80 rounded-xl p-4 flex flex-col justify-between">
             <div>
               <h5 className="text-[11px] font-black text-gray-900 dark:text-slate-100 uppercase tracking-wider mb-2 flex items-center space-x-1.5">
@@ -792,7 +773,6 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
             })()}
           </div>
 
-          {/* Box 3: Price management (price_history) */}
           <div className="bg-gray-50/50 dark:bg-slate-850/40 border border-gray-150 dark:border-slate-800/80 rounded-xl p-4 flex flex-col justify-between">
             <div>
               <h5 className="text-[11px] font-black text-gray-900 dark:text-slate-100 uppercase tracking-wider mb-2 flex items-center space-x-1.5">
@@ -841,7 +821,6 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
       {currentUser.role === 'Старший товаровед' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           
-          {/* Box 1: Receive Deliveries (Deliveries + Batches mutation) */}
           <div className="bg-gray-50/50 dark:bg-slate-850/40 border border-gray-150 dark:border-slate-800/80 rounded-xl p-4">
             <h5 className="text-[11px] font-black text-gray-900 dark:text-slate-100 uppercase tracking-wider mb-2 flex items-center space-x-1.5">
               <Truck className="w-4 h-4 text-emerald-600" />
@@ -942,7 +921,6 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
             </form>
           </div>
 
-          {/* Box 2: Suppliers Directory */}
           <div className="bg-gray-50/50 dark:bg-slate-850/40 border border-gray-150 dark:border-slate-800/80 rounded-xl p-4 flex flex-col justify-between">
             <div>
               <h5 className="text-[11px] font-black text-gray-900 dark:text-slate-100 uppercase tracking-wider mb-2 flex items-center space-x-1.5">
@@ -978,7 +956,6 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
       {currentUser.role === 'Товаровед-кассир' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
-          {/* Column 1: Portative TSD Barcode Scanner Simulator */}
           <div className="bg-gray-950 text-slate-100 rounded-2xl p-4 border-4 border-slate-700 shadow-md flex flex-col justify-between font-mono relative overflow-hidden h-[360px]">
             <div className="absolute top-0 right-0 p-2 bg-emerald-500 text-slate-950 text-[8px] font-black rounded-bl uppercase">
               ТСД-10 ONLINE
@@ -990,7 +967,6 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
                 <span className="text-xs uppercase font-extrabold">Лазерный ТСД Терминал</span>
               </div>
 
-              {/* Selector to simulate physical scan */}
               <div className="space-y-1">
                 <label className="text-[9px] text-slate-400 uppercase block font-bold">Выберите товар на полке для наведения лазера:</label>
                 <select
@@ -1005,7 +981,6 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
                 </select>
               </div>
 
-              {/* Scan detail output */}
               {tsdSelectedProduct ? (
                 (() => {
                   const prod = dbState.products.find(p => p.id === tsdSelectedProduct);
@@ -1032,7 +1007,6 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
               )}
             </div>
 
-            {/* Quick Actions */}
             <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-900">
               <button
                 onClick={() => handleTsdMarkdown(30)}
@@ -1058,7 +1032,6 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
             </div>
           </div>
 
-          {/* Column 2: POS Checkout Terminal & Cash Register */}
           <div className="bg-gray-50/50 dark:bg-slate-850/40 border border-gray-150 dark:border-slate-800/80 rounded-xl p-4 flex flex-col justify-between h-[360px]">
             <div>
               <div className="flex justify-between items-center mb-2">
@@ -1067,7 +1040,6 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
                   <span>Кассовый терминал POS</span>
                 </h5>
                 
-                {/* Traffic Simulator Toggle */}
                 <div className="flex items-center space-x-1.5 bg-green-100 dark:bg-green-950/40 px-2 py-1 rounded-md">
                   <input
                     type="checkbox"
@@ -1086,7 +1058,6 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
                 Обслуживание покупателей в торговом зале. Каждая покупка списывает остаток товара и записывает прибыль в таблицу <span className="font-mono text-emerald-600 dark:text-emerald-400">sales_log</span>.
               </p>
 
-              {/* Cash Register Form */}
               <div className="space-y-2 bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 p-3 rounded-lg text-xs">
                 <div>
                   <label className="text-[9px] font-black text-gray-400 uppercase block mb-1">Выбор партии с полки:</label>
@@ -1140,7 +1111,6 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
             </div>
           </div>
 
-          {/* Column 3: Practice audit list & log */}
           <div className="bg-gray-50/50 dark:bg-slate-850/40 border border-gray-150 dark:border-slate-800/80 rounded-xl p-4 flex flex-col justify-between h-[360px]">
             <div>
               <h5 className="text-[11px] font-black text-gray-900 dark:text-slate-100 uppercase tracking-wider mb-2 flex items-center space-x-1.5">
@@ -1153,8 +1123,6 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
             </div>
 
             <div className="flex-1 bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-lg p-3 overflow-y-auto custom-scrollbar flex flex-col justify-between">
-              
-              {/* Receipts ticker */}
               <div className="space-y-1.5 max-h-48 overflow-y-auto custom-scrollbar flex-1 mb-2">
                 {tsdStatusMessage && (
                   <div className="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/30 text-emerald-800 dark:text-emerald-300 p-2.5 rounded text-[10px] font-bold animate-fade-in flex items-start space-x-1.5">
@@ -1176,7 +1144,6 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
                 )}
               </div>
 
-              {/* TSD telemetry ticker bottom */}
               <div className="border-t border-gray-100 dark:border-slate-800 pt-2">
                 <span className="text-[9px] font-black text-gray-400 uppercase block mb-1">Системные логи ТСД:</span>
                 <div className="space-y-1">
