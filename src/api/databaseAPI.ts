@@ -216,7 +216,7 @@ export async function createDelivery(delivery: any) {
 export async function getWriteoffActs() {
   const { data, error } = await supabase
     .from('writeoff_acts')
-    .select('*, stores(*), employees!creator_id(*), employees!approved_by_id(*)');
+    .select('*, stores(*)');
   if (error) throw error;
   return data || [];
 }
@@ -590,17 +590,22 @@ export async function recordSaleInSupabase(productId: string, quantity: number, 
     // 1. Проверяем, есть ли такая партия
     const { data: batch, error: batchError } = await supabase
       .from('batches')
-      .select('quantity')
+      .select('quantity, product_id')
       .eq('id', batchId)
-      .single();
+      .maybeSingle();  // ← Используем maybeSingle вместо single
     
     if (batchError) {
       console.error('❌ Ошибка поиска партии:', batchError);
       return false;
     }
 
-    if (!batch || batch.quantity < quantity) {
-      console.error('❌ Недостаточно товара на полке');
+    if (!batch) {
+      console.error('❌ Партия не найдена:', batchId);
+      return false;
+    }
+
+    if (batch.quantity < quantity) {
+      console.error(`❌ Недостаточно товара на полке: есть ${batch.quantity}, нужно ${quantity}`);
       return false;
     }
 
