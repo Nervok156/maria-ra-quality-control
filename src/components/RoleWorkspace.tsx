@@ -11,6 +11,24 @@ import {
   markdownBatchInDB, createWriteoffActInDB, approveActInDB, syncActTo1CInDB,
   updateEmployeeScheduleInDB, recordSaleInDB
 } from '../data/databaseState';
+import { 
+  getProducts, 
+  getBatches, 
+  getWriteoffActs, 
+  getWriteoffItems, 
+  getMarkdownLog, 
+  getSalesLog,
+  getEmployees,
+  getRoles,
+  getStores,
+  getSuppliers,
+  getShelfLocations,
+  getDeliveries,
+  getAuditLogs,
+  getPriceHistory,
+  getTelemetry,
+  getEmployeeSchedules
+} from '../api/databaseAPI';
 
 interface RoleWorkspaceProps {
   currentUser: { id: string; name: string; role: string };
@@ -48,17 +66,80 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
   const [salesSimulationActive, setSalesSimulationActive] = useState(false);
   const [liveSalesJournal, setLiveSalesJournal] = useState<{ id: string; text: string; time: string }[]>([]);
 
-  // Load and refresh state
-  const refreshLocalState = () => {
-    const updated = getDBState();
-    setDbState(updated);
+  // ✅ Загрузка данных из Supabase
+  const loadDataFromSupabase = async () => {
+    try {
+      console.log('📥 Загружаем финансовые данные из Supabase...');
+      
+      const [
+        products,
+        batches,
+        employees,
+        roles,
+        stores,
+        suppliers,
+        shelfLocations,
+        writeoffActs,
+        writeoffItems,
+        markdownLog,
+        deliveries,
+        auditLogs,
+        priceHistory,
+        telemetry,
+        schedules,
+        salesLog
+      ] = await Promise.all([
+        getProducts(),
+        getBatches(),
+        getEmployees(),
+        getRoles(),
+        getStores(),
+        getSuppliers(),
+        getShelfLocations(),
+        getWriteoffActs(),
+        getWriteoffItems(),
+        getMarkdownLog(),
+        getDeliveries(),
+        getAuditLogs(),
+        getPriceHistory(),
+        getTelemetry(),
+        getEmployeeSchedules(),
+        getSalesLog()
+      ]);
+
+      setDbState({
+        products: products || [],
+        batches: batches || [],
+        employees: employees || [],
+        roles: roles || [],
+        stores: stores || [],
+        suppliers: suppliers || [],
+        shelf_locations: shelfLocations || [],
+        writeoff_acts: writeoffActs || [],
+        writeoff_items: writeoffItems || [],
+        markdown_log: markdownLog || [],
+        deliveries: deliveries || [],
+        audit_logs: auditLogs || [],
+        price_history: priceHistory || [],
+        system_telemetry: telemetry || [],
+        employee_schedules: schedules || [],
+        sales_log: salesLog || [],
+        categories: []
+      });
+      
+      console.log('✅ Финансовые данные загружены');
+    } catch (error) {
+      console.error('❌ Ошибка загрузки данных из Supabase:', error);
+    }
   };
 
+  // ✅ Загрузка при монтировании и подписка на обновления
   useEffect(() => {
-    refreshLocalState();
-    window.addEventListener('maria_ra_db_updated', refreshLocalState);
+    loadDataFromSupabase();
+    
+    window.addEventListener('maria_ra_db_updated', loadDataFromSupabase);
     return () => {
-      window.removeEventListener('maria_ra_db_updated', refreshLocalState);
+      window.removeEventListener('maria_ra_db_updated', loadDataFromSupabase);
     };
   }, []);
 
@@ -106,7 +187,7 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
 
   const triggerUpdate = async () => {
     await onDbUpdate();
-    refreshLocalState();
+    await loadDataFromSupabase();
     window.dispatchEvent(new Event('maria_ra_db_updated'));
   };
 
