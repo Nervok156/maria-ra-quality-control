@@ -7,12 +7,7 @@ import FifoPlan from './components/FifoPlan';
 import DatabaseSchema from './components/DatabaseSchema';
 import RoleWorkspace from './components/RoleWorkspace';
 import { Employee, Product } from './types';
-import { 
-  getActiveProducts, 
-  getWriteoffActs, 
-  getWriteoffItems, 
-  getMarkdownLog 
-} from './api/databaseAPI';
+import { getActiveProducts } from './api/databaseAPI';
 import { 
   Terminal, ShieldCheck, RefreshCw, Database
 } from 'lucide-react';
@@ -54,8 +49,9 @@ export default function App() {
     loadData();
   }, []);
 
+  // ✅ ПРОСТО ОБНОВЛЯЕМ ДАННЫЕ, БЕЗ ПЕРЕЗАГРУЗКИ СТРАНИЦЫ
   const handleDbUpdate = async () => {
-  await loadData();
+    await loadData();
   };
 
   const handleLogout = () => {

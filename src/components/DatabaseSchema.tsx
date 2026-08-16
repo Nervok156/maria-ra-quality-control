@@ -781,8 +781,8 @@ export default function DatabaseSchema() {
                     {selectedTable.columns.map(col => (
                       <tr key={col.name} className="hover:bg-gray-50/40 dark:hover:bg-slate-900/50 transition-colors">
                         <td className="px-4 py-3 font-mono font-bold text-gray-900 dark:text-slate-100 flex items-center space-x-1.5">
-                          {col.isPrimary && <Key className="w-3 h-3 text-amber-500 shrink-0" title="Primary Key" />}
-                          {col.isForeign && <Link2 className="w-3 h-3 text-blue-500 shrink-0" title="Foreign Key" />}
+                          {col.isPrimary && <Key className="w-3 h-3 text-amber-500 shrink-0" aria-label="Primary Key" />}
+                          {col.isForeign && <Link2 className="w-3 h-3 text-blue-500 shrink-0" aria-label="Foreign Key" />}
                           <span>{col.name}</span>
                         </td>
                         <td className="px-4 py-3 font-mono text-[11px] text-slate-500 dark:text-slate-400">{col.type}</td>

@@ -1,6 +1,8 @@
 // Инициализация и управление 17 реляционными базами данных (таблицами) ТС «Мария-Ра»
 // Все таблицы хранятся в LocalStorage для симуляции реальной СУБД PostgreSQL/1С
 
+import { supabase } from '../lib/supabaseClient';
+
 export interface DBTableData {
   products: any[];
   batches: any[];
@@ -85,7 +87,6 @@ export const getDBState = (): DBTableData => {
     try {
       const parsed = JSON.parse(data);
       let updated = false;
-      // Защитное добавление новых таблиц при обновлении
       if (!parsed.employee_schedules || parsed.employee_schedules.length === 0) {
         parsed.employee_schedules = getInitialSchedules();
         updated = true;
@@ -98,7 +99,6 @@ export const getDBState = (): DBTableData => {
         parsed.system_telemetry = [];
         updated = true;
       }
-      // Убедимся, что 5 сотрудников есть в базе
       if (parsed.employees && parsed.employees.length < 5) {
         const hasSmirnov = parsed.employees.some((e: any) => e.id === '5');
         if (!hasSmirnov) {
@@ -106,7 +106,6 @@ export const getDBState = (): DBTableData => {
           updated = true;
         }
       }
-      // Обновление ролей на профессиональное имя
       if (parsed.roles) {
         const traRole = parsed.roles.find((r: any) => r.id === 'role_tra');
         if (traRole && traRole.name !== 'Товаровед-кассир') {
@@ -123,7 +122,6 @@ export const getDBState = (): DBTableData => {
     }
   }
 
-  // Засеивание начальных данных
   const state: DBTableData = {
     products: [
       { id: '1', barcode: '4607142210012', name: 'Молоко Мария-Ра 2.5%, 900 мл', category_id: 'dairy', base_price: 69.00, shelf_life_days: 7, created_at: '2026-06-01T10:00:00Z' },
@@ -197,7 +195,6 @@ export const saveDBState = (state: DBTableData) => {
   localStorage.setItem('maria_ra_db_state', JSON.stringify(state));
 };
 
-
 // Функция JOIN для получения списка товаров на полках со статусами и ценами уценки
 export const getActiveProductsFromDB = (state: DBTableData): any[] => {
   return state.batches.map(b => {
@@ -220,13 +217,9 @@ export const getActiveProductsFromDB = (state: DBTableData): any[] => {
     if (md) {
       status = 'marked_down';
     }
-
-    if (b.is_written_off) {
-      status = 'written_off';
-    }
     
     return {
-      id: b.id, // ID партии выступает как уникальный ID товара на полке
+      id: b.id,
       barcode: p ? p.barcode : '0000000000000',
       name: p ? p.name : 'Товар удален из каталога',
       category: p ? p.category_id : 'other',
@@ -237,7 +230,6 @@ export const getActiveProductsFromDB = (state: DBTableData): any[] => {
       status: status,
       markdownPrice: md ? md.new_price : undefined,
       markdownPercent: md ? md.discount_percent : undefined,
-      writeOffReason: b.writeoff_reason,
       location: b.location_id,
       addedAt: b.added_at ? b.added_at.slice(0, 10) : '2026-06-30'
     };
@@ -343,14 +335,32 @@ export const createWriteoffActInDB = (employee_id: string, items: { product_id: 
   return act_id;
 };
 
-// Мутация: Подписание акта директором (approved_by_id)
-export const approveActInDB = (act_id: string, director_id: string) => {
-  const state = getDBState();
-  const act = state.writeoff_acts.find(a => a.id === act_id);
-  if (act) {
-    act.approved_by_id = director_id;
-    saveDBState(state);
-    addTelemetry(director_id, 'APPROVE_WRITEOFF_ACT', { act_id });
+// ✅ ИСПРАВЛЕННАЯ ФУНКЦИЯ: Подписание акта директором (approved_by_id) - теперь использует Supabase
+export const approveActInDB = async (actId: string, directorId: string) => {
+  try {
+    // Обновляем акт в Supabase
+    const { error } = await supabase
+      .from('writeoff_acts')
+      .update({ approved_by_id: directorId })
+      .eq('id', actId);
+    
+    if (error) {
+      console.error('❌ Ошибка утверждения акта в Supabase:', error);
+      return;
+    }
+    
+    // Также обновляем в LocalStorage для совместимости
+    const state = getDBState();
+    const act = state.writeoff_acts.find(a => a.id === actId);
+    if (act) {
+      act.approved_by_id = directorId;
+      saveDBState(state);
+    }
+    
+    addTelemetry(directorId, 'APPROVE_WRITEOFF_ACT', { act_id: actId });
+    console.log('✅ Акт утвержден в Supabase');
+  } catch (error) {
+    console.error('❌ Ошибка при утверждении акта:', error);
   }
 };
 
@@ -377,54 +387,99 @@ export const addTelemetry = (employeeId: string, actionType: string, payload: an
     occurred_at: new Date().toISOString()
   };
   state.system_telemetry.unshift(newLog);
-  // Ограничим логи телеметрии 100 записями
   if (state.system_telemetry.length > 100) {
     state.system_telemetry.pop();
   }
   saveDBState(state);
 };
 
-// Мутация: Изменение расписания сотрудника
-export const updateEmployeeScheduleInDB = (director_id: string, employee_id: string, day_type: 'today' | 'tomorrow', shift_name: string, status: string) => {
-  const state = getDBState();
-  const schedule = state.employee_schedules.find(s => s.employee_id === employee_id && s.day_type === day_type);
-  if (schedule) {
-    schedule.shift_name = shift_name;
-    schedule.status = status;
-  } else {
-    state.employee_schedules.push({
-      id: `sched_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
-      employee_id,
-      shift_name,
-      day_type,
-      status
-    });
+// ✅ ИСПРАВЛЕННАЯ ФУНКЦИЯ: Изменение расписания сотрудника - теперь использует Supabase
+export const updateEmployeeScheduleInDB = async (director_id: string, employee_id: string, day_type: 'today' | 'tomorrow', shift_name: string, status: string) => {
+  try {
+    // Проверяем, есть ли уже запись в Supabase
+    const { data: existing, error: findError } = await supabase
+      .from('employee_schedules')
+      .select('id')
+      .eq('employee_id', employee_id)
+      .eq('day_type', day_type)
+      .maybeSingle();
+    
+    if (findError) {
+      console.error('❌ Ошибка поиска расписания:', findError);
+      return;
+    }
+    
+    if (existing) {
+      // Обновляем существующую запись в Supabase
+      const { error: updateError } = await supabase
+        .from('employee_schedules')
+        .update({ shift_name, status })
+        .eq('id', existing.id);
+      
+      if (updateError) {
+        console.error('❌ Ошибка обновления расписания:', updateError);
+      } else {
+        console.log('✅ Расписание обновлено в Supabase');
+      }
+    } else {
+      // Создаём новую запись в Supabase
+      const { error: insertError } = await supabase
+        .from('employee_schedules')
+        .insert([{
+          id: `sched_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+          employee_id,
+          shift_name,
+          day_type,
+          status
+        }]);
+      
+      if (insertError) {
+        console.error('❌ Ошибка создания расписания:', insertError);
+      } else {
+        console.log('✅ Новое расписание создано в Supabase');
+      }
+    }
+    
+    // Также обновляем в LocalStorage для совместимости
+    const state = getDBState();
+    const schedule = state.employee_schedules.find(s => s.employee_id === employee_id && s.day_type === day_type);
+    if (schedule) {
+      schedule.shift_name = shift_name;
+      schedule.status = status;
+    } else {
+      state.employee_schedules.push({
+        id: `sched_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+        employee_id,
+        shift_name,
+        day_type,
+        status
+      });
+    }
+    saveDBState(state);
+    
+    const empName = state.employees.find(e => e.id === employee_id)?.name || employee_id;
+    addTelemetry(director_id, 'UPDATE_SCHEDULE', { employee_id, employee_name: empName, day_type, shift_name, status });
+  } catch (error) {
+    console.error('❌ Ошибка при обновлении расписания:', error);
   }
-  saveDBState(state);
-  
-  const empName = state.employees.find(e => e.id === employee_id)?.name || employee_id;
-  addTelemetry(director_id, 'UPDATE_SCHEDULE', { employee_id, employee_name: empName, day_type, shift_name, status });
 };
 
 // Мутация: Регистрация розничной продажи (Заработок магазина)
 export const recordSaleInDB = (productId: string, quantity: number, unitPrice: number, batchId: string) => {
   const state = getDBState();
   
-  // Находим партию
   const batch = state.batches.find(b => b.id === batchId);
   if (!batch) return false;
   
   if (batch.quantity < quantity) {
-    return false; // Недостаточно остатка на полке
+    return false;
   }
   
-  // Списываем количество
   batch.quantity -= quantity;
   if (batch.quantity <= 0) {
     state.batches = state.batches.filter(b => b.id !== batchId);
   }
   
-  // Добавляем запись в кассовую книгу
   const saleId = `sale_${Date.now()}_${Math.random().toString(36).substr(2,4)}`;
   const totalSum = parseFloat((quantity * unitPrice).toFixed(2));
   
@@ -448,5 +503,3 @@ export const recordSaleInDB = (productId: string, quantity: number, unitPrice: n
   
   return true;
 };
-
-
