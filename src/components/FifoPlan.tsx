@@ -39,7 +39,6 @@ export default function FifoPlan({ products, currentUser }: FifoPlanProps) {
   });
 
   // To build a batch plan, let's group products by Name + Category + Location
-  // Each unique product name can have multiple batches (represented by separate entries in catalog)
   const uniqueProductKeys = Array.from(new Set(filteredProducts.map(p => p.name)));
 
   // Generate FIFO shelf rotation advice for a product's batches
@@ -129,7 +128,7 @@ export default function FifoPlan({ products, currentUser }: FifoPlanProps) {
                 <RefreshCw className="w-5 h-5 animate-spin-slow" />
               </span>
               <h2 className="text-sm font-black text-gray-900 dark:text-slate-100 uppercase tracking-tight">
-                Интерактивная планограмма ротации
+                Интерактивная планограмма ротации FIFO
               </h2>
             </div>
             <p className="text-xs text-gray-500 dark:text-slate-400 leading-relaxed max-w-3xl">
@@ -243,7 +242,6 @@ export default function FifoPlan({ products, currentUser }: FifoPlanProps) {
                         </span>
 
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                          {/* We render 3 virtual positions: Front, Middle, Back */}
                           {/* Front Slot (Row 1) */}
                           <div className="bg-white dark:bg-slate-900 border border-dashed border-red-300 dark:border-red-900/50 rounded-xl p-3 flex flex-col justify-between min-h-[140px] shadow-2xs">
                             <div className="flex justify-between items-center pb-2 border-b border-gray-50 dark:border-slate-800 mb-2">
@@ -320,18 +318,27 @@ export default function FifoPlan({ products, currentUser }: FifoPlanProps) {
                           </div>
                         </div>
 
-                        {/* Expired / Alerts warnings if any */}
-                        {adviceList.some(a => a.shelfRow.includes('ИЗЪЯТЬ')) && (
-                          <div className="mt-3 bg-red-600 text-white rounded-lg p-3 text-xs flex items-center space-x-3 shadow-xs">
-                            <span className="text-lg">⚠️</span>
-                            <div>
-                              <span className="font-extrabold uppercase block text-[10px] tracking-wider">Критическое предупреждение!</span>
-                              <p className="font-medium mt-0.5">
-                                Обнаружена просроченная партия этого товара! Немедленно изымите {adviceList.filter(a => a.shelfRow.includes('ИЗЪЯТЬ')).reduce((acc, i) => acc + i.batch.quantity, 0)} шт. с полок и оформите Акт ТОРГ-16!
-                              </p>
+                        {/* ✅ Исправленное предупреждение о просрочке — только если есть товары */}
+                        {(() => {
+                          const expiredItems = adviceList.filter(a => a.shelfRow.includes('ИЗЪЯТЬ'));
+                          const totalExpired = expiredItems.reduce((acc, i) => acc + i.batch.quantity, 0);
+                          
+                          if (expiredItems.length === 0 || totalExpired === 0) {
+                            return null;
+                          }
+                          
+                          return (
+                            <div className="mt-3 bg-red-600 text-white rounded-lg p-3 text-xs flex items-center space-x-3 shadow-xs">
+                              <span className="text-lg">⚠️</span>
+                              <div>
+                                <span className="font-extrabold uppercase block text-[10px] tracking-wider">Критическое предупреждение!</span>
+                                <p className="font-medium mt-0.5">
+                                  Обнаружена просроченная партия этого товара! Немедленно изымите {totalExpired} шт. с полок и оформите Акт ТОРГ-16!
+                                </p>
+                              </div>
                             </div>
-                          </div>
-                        )}
+                          );
+                        })()}
                       </div>
 
                     </div>
