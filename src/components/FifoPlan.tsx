@@ -317,28 +317,30 @@ export default function FifoPlan({ products, currentUser }: FifoPlanProps) {
                             )}
                           </div>
                         </div>
-
-                        {/* ✅ Исправленное предупреждение о просрочке — только если есть товары */}
+                        {/* Expired / Alerts warnings if any */}
                         {(() => {
-                          const expiredItems = adviceList.filter(a => a.shelfRow.includes('ИЗЪЯТЬ'));
-                          const totalExpired = expiredItems.reduce((acc, i) => acc + i.batch.quantity, 0);
-                          
-                          if (expiredItems.length === 0 || totalExpired === 0) {
-                            return null;
-                          }
-                          
-                          return (
-                            <div className="mt-3 bg-red-600 text-white rounded-lg p-3 text-xs flex items-center space-x-3 shadow-xs">
-                              <span className="text-lg">⚠️</span>
-                              <div>
-                                <span className="font-extrabold uppercase block text-[10px] tracking-wider">Критическое предупреждение!</span>
-                                <p className="font-medium mt-0.5">
-                                  Обнаружена просроченная партия этого товара! Немедленно изымите {totalExpired} шт. с полок и оформите Акт ТОРГ-16!
-                                </p>
-                              </div>
-                            </div>
-                          );
-                        })()}
+  const expiredItems = adviceList.filter(a => {
+    return a.batch.status === 'expired' && a.shelfRow.includes('ИЗЪЯТЬ');
+  });
+  
+  const totalExpired = expiredItems.reduce((acc, i) => acc + i.batch.quantity, 0);
+  
+  if (expiredItems.length === 0 || totalExpired === 0) {
+    return null;
+  }
+  
+  return (
+    <div className="mt-3 bg-red-600 text-white rounded-lg p-3 text-xs flex items-center space-x-3 shadow-xs">
+      <span className="text-lg">⚠️</span>
+      <div>
+        <span className="font-extrabold uppercase block text-[10px] tracking-wider">Критическое предупреждение!</span>
+        <p className="font-medium mt-0.5">
+          Обнаружена просроченная партия этого товара! Немедленно изымите {totalExpired} шт. с полок и оформите Акт ТОРГ-16!
+        </p>
+      </div>
+    </div>
+  );
+})()}
                       </div>
 
                     </div>
