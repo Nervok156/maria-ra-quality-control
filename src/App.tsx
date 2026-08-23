@@ -116,9 +116,13 @@ export default function App() {
             </h3>
           </div>
           <div className="text-right shrink-0">
-            <span className="text-[10px] font-mono text-gray-400 dark:text-slate-500 font-bold block">IP терминала: 192.168.12.44</span>
-            <span className="text-[9px] text-green-600 dark:text-green-400 font-black block mt-0.5">РЕЖИМ ДОСТУПА: {currentUser.role === 'Директор магазина' ? 'ПОЛНЫЙ' : 'РАЗГРАНИЧЕННЫЙ'}</span>
-          </div>
+  <span className="text-[10px] font-mono text-gray-400 dark:text-slate-500 font-bold block">
+    Терминал: ТСД-10
+  </span>
+  <span className="text-[9px] text-green-600 dark:text-green-400 font-black block mt-0.5">
+    РЕЖИМ ДОСТУПА: {currentUser.role === 'Директор магазина' ? 'ПОЛНЫЙ' : 'РАЗГРАНИЧЕННЫЙ'}
+  </span>
+</div>
         </div>
 
         <RoleWorkspace currentUser={currentUser} onDbUpdate={handleDbUpdate} />

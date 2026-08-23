@@ -32,6 +32,9 @@ export default function FreshnessControl({ products, setProducts, currentUser, o
     window.print();
   };
 
+  // ✅ Проверка прав на уценку
+  const canMarkdown = currentUser.role === 'Директор магазина' || currentUser.role === 'Старший товаровед';
+
   const calculateStatusAndPercent = (expiryDateStr: string, manufactureDateStr?: string) => {
     const today = new Date(simulatedToday);
     const expiry = new Date(expiryDateStr);
@@ -226,12 +229,29 @@ export default function FreshnessControl({ products, setProducts, currentUser, o
   };
 
   // ==========================================================
-  // ✅ УЦЕНКА
+  // ✅ ФУНКЦИЯ УЦЕНКИ (с проверкой прав и статуса)
   // ==========================================================
   const applyMarkdown = async () => {
-    if (!selectedProduct) return;
+    if (!selectedProduct) {
+      console.warn('Нет выбранного товара');
+      return;
+    }
+    
+    // Проверка прав
+    if (!canMarkdown) {
+      alert('У вас нет прав для проведения уценки!');
+      return;
+    }
+    
+    // Проверка статуса товара
+    if (selectedProduct.status !== 'expiring_soon' && selectedProduct.status !== 'marked_down') {
+      alert('Уценка возможна только для товаров с истекающим сроком годности!');
+      return;
+    }
     
     try {
+      console.log('🔄 Применяем уценку...');
+      
       await createMarkdown({
         batch_id: selectedProduct.id,
         employee_id: currentUser?.id || '1',
@@ -246,10 +266,13 @@ export default function FreshnessControl({ products, setProducts, currentUser, o
         payload: { batch_id: selectedProduct.id, discount_percent: markdownPercent }
       });
       
-      await onDataChange();
+      const updatedProducts = await getActiveProducts();
+      setProducts(updatedProducts);
       
       setShowMarkdownModal(false);
       setSelectedProduct(null);
+      
+      console.log('✅ Уценка применена успешно');
     } catch (error) {
       console.error('❌ Ошибка при уценке:', error);
       alert('Не удалось применить уценку.');
@@ -656,7 +679,8 @@ export default function FreshnessControl({ products, setProducts, currentUser, o
                         </td>
                         <td className="px-5 py-4 text-right">
                           <div className="flex justify-end space-x-1.5">
-                            {!isWrittenOff && !isMarkedDown && (
+                            {/* ✅ Кнопка уценки — только для Директора и Старшего товароведа */}
+                            {!isWrittenOff && !isMarkedDown && canMarkdown && (
                               <button
                                 onClick={() => {
                                   setSelectedProduct(product);
@@ -753,27 +777,53 @@ export default function FreshnessControl({ products, setProducts, currentUser, o
             )}
 
             {currentUser.role === 'Старший бухгалтер' && (
-  <div className="bg-slate-50 dark:bg-slate-850 border border-slate-200/60 dark:border-slate-800 rounded-xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-    <div className="space-y-1">
-      <div className="flex items-center space-x-2">
-        <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
-        <span className="text-[10px] font-extrabold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded-sm">
-          БУХГАЛТЕРСКАЯ СРЕДА
-        </span>
-      </div>
-      <h5 className="text-xs font-bold text-gray-900 dark:text-slate-200">Интеграция с 1С:Предприятие</h5>
-      <p className="text-[10px] text-gray-500 dark:text-slate-400 leading-relaxed font-medium">
-        <span className="text-amber-500 font-bold">⚠️</span> Функционал выгрузки в 1С временно отключен.
-        Все данные доступны для просмотра в разделе <b>«Схема СУБД»</b>.
-      </p>
-    </div>
-    <div className="shrink-0">
-      <span className="px-4 py-2 bg-gray-200 dark:bg-slate-800 text-gray-500 dark:text-slate-400 rounded-xl text-xs font-black uppercase tracking-tight border border-gray-300 dark:border-slate-700 cursor-not-allowed">
-        🚧 В РАЗРАБОТКЕ
-      </span>
-    </div>
-  </div>
-)}
+              <div className="bg-slate-50 dark:bg-slate-850 border border-slate-200/60 dark:border-slate-800 rounded-xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center space-x-2">
+                    <span className={`w-2 h-2 rounded-full ${isExportedTo1C ? 'bg-indigo-500' : 'bg-amber-500 animate-pulse'}`}></span>
+                    <span className={`text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-sm ${isExportedTo1C ? 'text-indigo-700 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40' : 'text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40'}`}>
+                      1C: {isExportedTo1C ? 'ВЫГРУЖЕНО В БУХГАЛТЕРИЮ' : 'ОЖИДАЕТ ПРОВОДОК'}
+                    </span>
+                  </div>
+                  <h5 className="text-xs font-bold text-gray-900 dark:text-slate-200">Бухгалтерский пульт</h5>
+                </div>
+                <div className="shrink-0">
+                  {isExportedTo1C ? (
+                    <div className="text-right">
+                      <span className="flex items-center justify-center space-x-1.5 text-xs font-extrabold text-indigo-600 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/40 px-3.5 py-2 rounded-lg mb-1">
+                        <Check className="w-4 h-4" />
+                        <span>УСПЕШНО ПРОВЕДЕНО В 1С</span>
+                      </span>
+                      <span className="text-[8px] font-mono font-bold text-gray-400 dark:text-slate-500 block">Проводка: Дт 94 - Кт 41.01</span>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setIsExporting(true);
+                        setTimeout(() => {
+                          setIsExporting(false);
+                          setIsExportedTo1C(true);
+                        }, 1800);
+                      }}
+                      disabled={isExporting || !isApprovedByDirector}
+                      className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-tight flex items-center space-x-2 transition-all active:scale-98 shadow-xs ${!isApprovedByDirector ? 'bg-gray-100 text-gray-400 dark:bg-slate-800 dark:text-slate-600 border border-gray-200 dark:border-slate-800 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer'}`}
+                    >
+                      {isExporting ? (
+                        <>
+                          <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                          <span>ЭКСПОРТ В 1С...</span>
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5" />
+                          <span>ВЫГРУЗИТЬ В 1С:ПРЕДПРИЯТИЕ</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Committee editing config */}
@@ -1219,33 +1269,58 @@ export default function FreshnessControl({ products, setProducts, currentUser, o
         </div>
       )}
 
-      {/* MODAL: MARKDOWN */}
+      {/* ✅ MODAL: MARKDOWN (с проверкой статуса) */}
       {showMarkdownModal && selectedProduct && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 no-print">
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-800 shadow-2xl w-full max-w-sm p-6 animate-zoom-in transition-colors duration-200">
-            <h3 className="text-sm font-black text-gray-900 dark:text-slate-100 uppercase pb-3 border-b border-gray-100 dark:border-slate-800">Уценка скоропортящегося товара</h3>
+            <h3 className="text-sm font-black text-gray-900 dark:text-slate-100 uppercase pb-3 border-b border-gray-100 dark:border-slate-800">
+              Уценка скоропортящегося товара
+            </h3>
+            
+            {/* ✅ Проверка статуса товара */}
+            {selectedProduct.status !== 'expiring_soon' && selectedProduct.status !== 'marked_down' && (
+              <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30 rounded-lg p-3 my-3">
+                <p className="text-xs text-amber-800 dark:text-amber-300 font-bold">
+                  ⚠️ Уценка возможна только для товаров с истекающим сроком годности (осталось ≤ 2 дней).
+                </p>
+                <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1">
+                  Текущий статус: <span className="font-bold">{selectedProduct.status}</span>
+                </p>
+              </div>
+            )}
+            
             <p className="text-xs text-gray-600 dark:text-slate-400 mt-3 leading-relaxed">
               Вы собираетесь сделать уценку для товара: <b className="text-gray-900 dark:text-slate-100 block mt-1">{selectedProduct.name}</b>
             </p>
+
             <div className="my-4">
               <label className="block text-[10px] font-extrabold text-gray-500 dark:text-slate-400 uppercase mb-2">Выберите размер скидки (уценки):</label>
               <div className="grid grid-cols-2 gap-3">
                 <button
                   onClick={() => setMarkdownPercent(30)}
-                  className={`py-3 rounded-lg text-xs font-extrabold border transition-all ${markdownPercent === 30 ? 'bg-green-50 dark:bg-green-950/40 border-green-400 dark:border-green-800 text-green-800 dark:text-green-300 font-black' : 'bg-white dark:bg-slate-800 border-gray-100 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-850'}`}
+                  className={`py-3 rounded-lg text-xs font-extrabold border transition-all ${
+                    markdownPercent === 30
+                      ? 'bg-green-50 dark:bg-green-950/40 border-green-400 dark:border-green-800 text-green-800 dark:text-green-300 font-black'
+                      : 'bg-white dark:bg-slate-800 border-gray-100 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-850'
+                  }`}
                 >
                   Скидка -30%
                   <span className="block text-[9px] font-normal text-gray-400 dark:text-slate-500 mt-1">Новая цена: {Math.round(selectedProduct.price * 0.7)} ₽</span>
                 </button>
                 <button
                   onClick={() => setMarkdownPercent(50)}
-                  className={`py-3 rounded-lg text-xs font-extrabold border transition-all ${markdownPercent === 50 ? 'bg-green-50 dark:bg-green-950/40 border-green-400 dark:border-green-800 text-green-800 dark:text-green-300 font-black' : 'bg-white dark:bg-slate-800 border-gray-100 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-850'}`}
+                  className={`py-3 rounded-lg text-xs font-extrabold border transition-all ${
+                    markdownPercent === 50
+                      ? 'bg-green-50 dark:bg-green-950/40 border-green-400 dark:border-green-800 text-green-800 dark:text-green-300 font-black'
+                      : 'bg-white dark:bg-slate-800 border-gray-100 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-850'
+                  }`}
                 >
                   Скидка -50%
                   <span className="block text-[9px] font-normal text-gray-400 dark:text-slate-500 mt-1">Новая цена: {Math.round(selectedProduct.price * 0.5)} ₽</span>
                 </button>
               </div>
             </div>
+
             <div className="flex justify-end space-x-2 pt-4 border-t border-gray-100 dark:border-slate-800">
               <button
                 onClick={() => {
@@ -1258,7 +1333,12 @@ export default function FreshnessControl({ products, setProducts, currentUser, o
               </button>
               <button
                 onClick={applyMarkdown}
-                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg cursor-pointer transition-colors"
+                disabled={selectedProduct.status !== 'expiring_soon' && selectedProduct.status !== 'marked_down'}
+                className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors ${
+                  selectedProduct.status === 'expiring_soon' || selectedProduct.status === 'marked_down'
+                    ? 'bg-green-600 hover:bg-green-700 text-white cursor-pointer'
+                    : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                }`}
               >
                 Применить уценку
               </button>
