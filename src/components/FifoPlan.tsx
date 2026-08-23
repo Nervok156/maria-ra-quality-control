@@ -129,7 +129,7 @@ export default function FifoPlan({ products, currentUser }: FifoPlanProps) {
                 <RefreshCw className="w-5 h-5 animate-spin-slow" />
               </span>
               <h2 className="text-sm font-black text-gray-900 dark:text-slate-100 uppercase tracking-tight">
-                Интерактивный планограмма-ассистент ротации FIFO
+                Интерактивная планограмма ротации
               </h2>
             </div>
             <p className="text-xs text-gray-500 dark:text-slate-400 leading-relaxed max-w-3xl">

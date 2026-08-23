@@ -148,7 +148,7 @@ export default function App() {
             }`}
           >
             <RefreshCw className="w-4 h-4" />
-            <span>План выкладки (FIFO)</span>
+            <span>Планограмма  (FIFO)</span>
           </button>
           {/* Вкладка "Схема СУБД" — скрыта для кассира */}
           {currentUser.role !== 'Товаровед-кассир' && (

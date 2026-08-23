@@ -168,11 +168,11 @@ const dbTables: DBTable[] = [
   },
   {
     name: 'shelf_locations',
-    russianName: 'Адреса выкладки (Стеллажи)',
+    russianName: 'Планограмма (Стеллажи)',
     description: 'Карта зон торгового зала и складских холодильников',
     columns: [
       { name: 'id', type: 'VARCHAR(36)', isPrimary: true, description: 'Код зоны' },
-      { name: 'zone_code', type: 'VARCHAR(50)', nullable: false, description: 'Код адреса выкладки (например, COLD-R1)' },
+      { name: 'zone_code', type: 'VARCHAR(50)', nullable: false, description: 'Код Планограмма (например, COLD-R1)' },
       { name: 'description', type: 'VARCHAR(150)', nullable: false, description: 'Описание места хранения' },
       { name: 'temp_regime', type: 'VARCHAR(50)', description: 'Температурный режим хранения' }
     ]
