@@ -28,10 +28,12 @@ export default function App() {
   
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const loadData = async () => {
     try {
       setLoading(true);
+      setError(null);
       console.log('📥 Загружаем данные из Supabase...');
       
       const activeProducts = await getActiveProducts();
@@ -40,6 +42,7 @@ export default function App() {
       setProducts(activeProducts);
     } catch (error) {
       console.error('❌ Ошибка загрузки данных:', error);
+      setError('Не удалось загрузить данные. Проверьте подключение к интернету и перезагрузите страницу.');
     } finally {
       setLoading(false);
     }
@@ -49,7 +52,6 @@ export default function App() {
     loadData();
   }, []);
 
-  // ✅ ПРОСТО ОБНОВЛЯЕМ ДАННЫЕ, БЕЗ ПЕРЕЗАГРУЗКИ СТРАНИЦЫ
   const handleDbUpdate = async () => {
     await loadData();
   };
@@ -114,18 +116,36 @@ export default function App() {
             <h3 className="text-xs font-extrabold text-gray-900 dark:text-slate-100">
               Рабочий сеанс: <span className="text-green-700 dark:text-green-400">{currentUser.name}</span>
             </h3>
+            <p className="text-[10px] text-gray-500 dark:text-slate-400 font-medium">
+              {currentUser.role === 'Товаровед-кассир' && '✓ Ваша среда настроена на работу кассира. Доступен ТСД-терминал ротации FIFO, аудит свежести полок и симулятор розничных продаж на кассе.'}
+              {currentUser.role === 'Директор магазина' && '✓ Административная консоль руководителя. Доступно интерактивное планирование смен сотрудников, анализ выручки и прибыли, утверждение ТОРГ-16.'}
+              {currentUser.role === 'Старший бухгалтер' && '✓ Финансово-учетная среда бухгалтерии. Выгрузка проводок в 1С Бухгалтерию, контроль НДС, учет выручки и прибыль розничной точки.'}
+              {currentUser.role === 'Старший товаровед' && '✓ Операционный терминал товароведа. Контроль зон выкладки, оформление приходов от поставщиков и уценка.'}
+            </p>
           </div>
           <div className="text-right shrink-0">
-  <span className="text-[10px] font-mono text-gray-400 dark:text-slate-500 font-bold block">
-    Терминал: ТСД-10
-  </span>
-  <span className="text-[9px] text-green-600 dark:text-green-400 font-black block mt-0.5">
-    РЕЖИМ ДОСТУПА: {currentUser.role === 'Директор магазина' ? 'ПОЛНЫЙ' : 'РАЗГРАНИЧЕННЫЙ'}
-  </span>
-</div>
+            <span className="text-[10px] font-mono text-gray-400 dark:text-slate-500 font-bold block">
+              Терминал: ТСД-10
+            </span>
+            <span className="text-[9px] text-green-600 dark:text-green-400 font-black block mt-0.5">
+              РЕЖИМ ДОСТУПА: {currentUser.role === 'Директор магазина' ? 'ПОЛНЫЙ' : 'РАЗГРАНИЧЕННЫЙ'}
+            </span>
+          </div>
         </div>
 
         <RoleWorkspace currentUser={currentUser} onDbUpdate={handleDbUpdate} />
+
+        {error && (
+          <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30 rounded-xl p-4 mb-6">
+            <p className="text-sm text-red-700 dark:text-red-400 font-bold">⚠️ {error}</p>
+            <button 
+              onClick={() => window.location.reload()} 
+              className="mt-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-lg cursor-pointer transition-colors"
+            >
+              Перезагрузить страницу
+            </button>
+          </div>
+        )}
 
         <div className="flex flex-wrap gap-2 mb-6 no-print border-b border-gray-150 dark:border-slate-800 pb-4">
           <button
@@ -139,6 +159,7 @@ export default function App() {
             <ShieldCheck className="w-4 h-4" />
             <span>Контроль свежести & Списания</span>
           </button>
+          
           <button
             onClick={() => setActiveTab('fifo')}
             className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-tight transition-all cursor-pointer ${
@@ -148,23 +169,25 @@ export default function App() {
             }`}
           >
             <RefreshCw className="w-4 h-4" />
-            <span>Планограмма  (FIFO)</span>
+            <span>Планограмма (FIFO)</span>
           </button>
+
           {/* Вкладка "Схема СУБД" — скрыта для кассира */}
           {currentUser.role !== 'Товаровед-кассир' && (
-          <button
-            onClick={() => setActiveTab('database')}
-            className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-tight transition-all cursor-pointer ${
-              activeTab === 'database'
-                ? 'bg-green-600 text-white shadow-md'
-                : 'bg-white dark:bg-slate-900 text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-850 border border-gray-100 dark:border-slate-800'
-            }`}
-          >
-            <Database className="w-4 h-4" />
-            <span>Схема СУБД (17 таблиц)</span>
-          </button>
-        )}
+            <button
+              onClick={() => setActiveTab('database')}
+              className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-tight transition-all cursor-pointer ${
+                activeTab === 'database'
+                  ? 'bg-green-600 text-white shadow-md'
+                  : 'bg-white dark:bg-slate-900 text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-850 border border-gray-100 dark:border-slate-800'
+              }`}
+            >
+              <Database className="w-4 h-4" />
+              <span>Схема СУБД (17 таблиц)</span>
+            </button>
+          )}
         </div>
+
         <motion.div
           key={activeTab}
           initial={{ opacity: 0, y: 15 }}
