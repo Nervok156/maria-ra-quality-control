@@ -150,6 +150,8 @@ export default function App() {
             <RefreshCw className="w-4 h-4" />
             <span>План выкладки (FIFO)</span>
           </button>
+          {/* Вкладка "Схема СУБД" — скрыта для кассира */}
+          {currentUser.role !== 'Товаровед-кассир' && (
           <button
             onClick={() => setActiveTab('database')}
             className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-tight transition-all cursor-pointer ${
@@ -161,8 +163,8 @@ export default function App() {
             <Database className="w-4 h-4" />
             <span>Схема СУБД (17 таблиц)</span>
           </button>
+        )}
         </div>
-
         <motion.div
           key={activeTab}
           initial={{ opacity: 0, y: 15 }}
