@@ -252,16 +252,6 @@ export async function approveWriteoffAct(id: string, approverId: string) {
   return data?.[0];
 }
 
-export async function exportTo1C(id: string) {
-  const { data, error } = await supabase
-    .from('writeoff_acts')
-    .update({ is_exported_to_1c: true })
-    .eq('id', id)
-    .select();
-  if (error) throw error;
-  return data?.[0];
-}
-
 // ==========================================================
 // 11. РАБОТА СО СТРОКАМИ АКТОВ СПИСАНИЯ
 // ==========================================================

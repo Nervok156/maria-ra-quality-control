@@ -364,16 +364,6 @@ export const approveActInDB = async (actId: string, directorId: string) => {
   }
 };
 
-// Мутация: Выгрузка в 1С бухгалтером (is_exported_to_1c)
-export const syncActTo1CInDB = (act_id: string, accountant_id: string) => {
-  const state = getDBState();
-  const act = state.writeoff_acts.find(a => a.id === act_id);
-  if (act) {
-    act.is_exported_to_1c = true;
-    saveDBState(state);
-    addTelemetry(accountant_id, 'EXPORT_TO_1C', { act_id });
-  }
-};
 
 // Функция добавления логов телеметрии
 export const addTelemetry = (employeeId: string, actionType: string, payload: any) => {

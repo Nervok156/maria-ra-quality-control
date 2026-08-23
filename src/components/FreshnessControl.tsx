@@ -753,53 +753,27 @@ export default function FreshnessControl({ products, setProducts, currentUser, o
             )}
 
             {currentUser.role === 'Старший бухгалтер' && (
-              <div className="bg-slate-50 dark:bg-slate-850 border border-slate-200/60 dark:border-slate-800 rounded-xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                <div className="space-y-1">
-                  <div className="flex items-center space-x-2">
-                    <span className={`w-2 h-2 rounded-full ${isExportedTo1C ? 'bg-indigo-500' : 'bg-amber-500 animate-pulse'}`}></span>
-                    <span className={`text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-sm ${isExportedTo1C ? 'text-indigo-700 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40' : 'text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40'}`}>
-                      1C: {isExportedTo1C ? 'ВЫГРУЖЕНО В БУХГАЛТЕРИЮ' : 'ОЖИДАЕТ ПРОВОДОК'}
-                    </span>
-                  </div>
-                  <h5 className="text-xs font-bold text-gray-900 dark:text-slate-200">Бухгалтерский пульт</h5>
-                </div>
-                <div className="shrink-0">
-                  {isExportedTo1C ? (
-                    <div className="text-right">
-                      <span className="flex items-center justify-center space-x-1.5 text-xs font-extrabold text-indigo-600 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/40 px-3.5 py-2 rounded-lg mb-1">
-                        <Check className="w-4 h-4" />
-                        <span>УСПЕШНО ПРОВЕДЕНО В 1С</span>
-                      </span>
-                      <span className="text-[8px] font-mono font-bold text-gray-400 dark:text-slate-500 block">Проводка: Дт 94 - Кт 41.01</span>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => {
-                        setIsExporting(true);
-                        setTimeout(() => {
-                          setIsExporting(false);
-                          setIsExportedTo1C(true);
-                        }, 1800);
-                      }}
-                      disabled={isExporting || !isApprovedByDirector}
-                      className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-tight flex items-center space-x-2 transition-all active:scale-98 shadow-xs ${!isApprovedByDirector ? 'bg-gray-100 text-gray-400 dark:bg-slate-800 dark:text-slate-600 border border-gray-200 dark:border-slate-800 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer'}`}
-                    >
-                      {isExporting ? (
-                        <>
-                          <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                          <span>ЭКСПОРТ В 1С...</span>
-                        </>
-                      ) : (
-                        <>
-                          <RefreshCw className="w-3.5 h-3.5" />
-                          <span>ВЫГРУЗИТЬ В 1С:ПРЕДПРИЯТИЕ</span>
-                        </>
-                      )}
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
+  <div className="bg-slate-50 dark:bg-slate-850 border border-slate-200/60 dark:border-slate-800 rounded-xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+    <div className="space-y-1">
+      <div className="flex items-center space-x-2">
+        <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
+        <span className="text-[10px] font-extrabold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded-sm">
+          БУХГАЛТЕРСКАЯ СРЕДА
+        </span>
+      </div>
+      <h5 className="text-xs font-bold text-gray-900 dark:text-slate-200">Интеграция с 1С:Предприятие</h5>
+      <p className="text-[10px] text-gray-500 dark:text-slate-400 leading-relaxed font-medium">
+        <span className="text-amber-500 font-bold">⚠️</span> Функционал выгрузки в 1С временно отключен.
+        Все данные доступны для просмотра в разделе <b>«Схема СУБД»</b>.
+      </p>
+    </div>
+    <div className="shrink-0">
+      <span className="px-4 py-2 bg-gray-200 dark:bg-slate-800 text-gray-500 dark:text-slate-400 rounded-xl text-xs font-black uppercase tracking-tight border border-gray-300 dark:border-slate-700 cursor-not-allowed">
+        🚧 В РАЗРАБОТКЕ
+      </span>
+    </div>
+  </div>
+)}
           </div>
 
           {/* Committee editing config */}
