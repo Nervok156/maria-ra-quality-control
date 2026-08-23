@@ -137,7 +137,7 @@ export default function Login({ onLogin }: LoginProps) {
             </div>
             <div className="flex items-center space-x-3 text-[10px] text-gray-400">
               <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
-              <span>Прямой экспорт в 1С:Предприятие 8.3</span>
+              <span>Интеграция с корпоративной СУБД</span>
             </div>
           </div>
         </div>
