@@ -49,10 +49,8 @@ export default function App() {
   };
 
   useEffect(() => {
-  // Принудительно удаляем класс dark
-  document.documentElement.classList.remove('dark');
-  localStorage.setItem('theme', 'light');
-}, []);
+    loadData();
+  }, []);
 
   const handleDbUpdate = async () => {
     await loadData();
