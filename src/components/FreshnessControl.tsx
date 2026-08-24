@@ -164,20 +164,27 @@ const calculateStatusAndPercent = (expiryDateStr: string, manufactureDateStr?: s
   const handleCreateProduct = async (e: React.FormEvent) => {
   e.preventDefault();
   
+  console.log('📝 Начинаем добавление товара...');
+  console.log('📦 Данные из формы:', {
+    name: newProduct.name,
+    barcode: newProduct.barcode,
+    manufactureDate: newProduct.manufactureDate,
+    expirationDate: newProduct.expirationDate,
+    price: newProduct.price,
+    quantity: newProduct.quantity,
+    category: newProduct.category,
+    location: newProduct.location
+  });
+  
   if (!newProduct.name || !newProduct.barcode || !newProduct.expirationDate) {
     alert("Пожалуйста, заполните основные поля: Название, Штрихкод и Срок годности!");
     return;
   }
 
-  // ✅ Логируем даты для проверки
-  console.log('🔄 Создаём товар с данными:', {
-    manufactureDate: newProduct.manufactureDate,
-    expirationDate: newProduct.expirationDate
-  });
-
   try {
     const trimmedBarcode = newProduct.barcode.trim();
 
+    // Проверяем, существует ли товар
     const { data: existingProducts, error: searchError } = await supabase
       .from('products')
       .select('id, name, barcode')
@@ -192,8 +199,10 @@ const calculateStatusAndPercent = (expiryDateStr: string, manufactureDateStr?: s
 
     if (existingProducts && existingProducts.length > 0) {
       productId = existingProducts[0].id;
+      console.log('✅ Товар уже существует, ID:', productId);
       alert(`Товар "${existingProducts[0].name}" уже есть в базе. Добавляем новую партию.`);
     } else {
+      console.log('🆕 Создаём новый товар...');
       const product = await createProduct({
         barcode: trimmedBarcode,
         name: newProduct.name,
@@ -206,17 +215,22 @@ const calculateStatusAndPercent = (expiryDateStr: string, manufactureDateStr?: s
         throw new Error('Не удалось создать товар');
       }
       productId = product.id;
+      console.log('✅ Создан товар с ID:', productId);
     }
 
-    // ✅ Используем даты из формы, если они есть
-    await createBatch({
+    // Создаём партию
+    const batchData = {
       product_id: productId,
       store_id: 'store_1',
       quantity: Number(newProduct.quantity),
       manufacture_date: newProduct.manufactureDate || new Date().toISOString().split('T')[0],
       expiration_date: newProduct.expirationDate,
       location_id: newProduct.location || 'shelf_1'
-    });
+    };
+    
+    console.log('📦 Создаём партию с данными:', batchData);
+    
+    await createBatch(batchData);
 
     await onDataChange();
     
@@ -231,6 +245,8 @@ const calculateStatusAndPercent = (expiryDateStr: string, manufactureDateStr?: s
       manufactureDate: '',
       location: 'shelf_1'
     });
+    
+    console.log('✅ Товар успешно добавлен!');
     
   } catch (error) {
     console.error('❌ Ошибка при создании товара:', error);
