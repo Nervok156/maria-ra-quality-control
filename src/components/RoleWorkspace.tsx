@@ -241,7 +241,7 @@ useEffect(() => {
         ]);
       }
     }, 4000);
-    
+
     return () => clearInterval(interval);
   }, [salesSimulationActive]);
 
@@ -676,9 +676,6 @@ useEffect(() => {
     return checkDate < today;
   }}
     />
-    <div className="mt-2 text-[10px] text-gray-400 dark:text-slate-500 text-center">
-      Выберите дату для просмотра смен
-    </div>
   </div>
 )}
 
