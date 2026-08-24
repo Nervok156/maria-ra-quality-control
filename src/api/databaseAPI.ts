@@ -694,6 +694,7 @@ export async function updateScheduleForDate(
 ) {
   const dateStr = date.toISOString().split('T')[0];
   
+  // Проверяем, есть ли уже запись
   const { data: existing, error: findError } = await supabase
     .from('employee_schedules')
     .select('id')
@@ -707,6 +708,7 @@ export async function updateScheduleForDate(
   }
   
   if (existing) {
+    // Обновляем существующую запись
     const { data, error } = await supabase
       .from('employee_schedules')
       .update({
@@ -723,9 +725,11 @@ export async function updateScheduleForDate(
     }
     return data?.[0];
   } else {
+    // ✅ СОЗДАЁМ НОВУЮ ЗАПИСЬ С ГЕНЕРАЦИЕЙ ID
     const { data, error } = await supabase
       .from('employee_schedules')
       .insert([{
+        id: `sched_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`, // ✅ Генерируем ID
         employee_id: employeeId,
         schedule_date: dateStr,
         shift_name: shiftName,
