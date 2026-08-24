@@ -145,15 +145,15 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
   };
 
   const loadSchedules = async (date: Date) => {
-    try {
-      console.log('📥 Загружаем расписание на', date.toLocaleDateString('ru-RU'));
-      const data = await getSchedulesByDate(date);
-      setSchedules(data);
-      console.log('✅ Загружено записей:', data.length);
-    } catch (error) {
-      console.error('❌ Ошибка загрузки расписания:', error);
-    }
-  };
+  try {
+    console.log('📥 Загружаем расписание на', date.toLocaleDateString('ru-RU'));
+    const data = await getSchedulesByDate(date);
+    setSchedules(data);
+    console.log('✅ Загружено записей:', data.length);
+  } catch (error) {
+    console.error('❌ Ошибка загрузки расписания:', error);
+  }
+};
 
   useEffect(() => {
     loadDataFromSupabase();
@@ -163,17 +163,28 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
       window.removeEventListener('maria_ra_db_updated', loadDataFromSupabase);
     };
   }, []);
-
-  // Загружаем расписание при смене дня
-  useEffect(() => {
+// Загружаем расписание при смене дня (без обновления selectedDate для месяца)
+useEffect(() => {
+  if (viewMode === 'day') {
     let date = new Date();
     if (selectedScheduleDay === 'tomorrow') {
       date.setDate(date.getDate() + 1);
     }
     setSelectedDate(date);
     loadSchedules(date);
-  }, [selectedScheduleDay]);
-
+  }
+}, [selectedScheduleDay, viewMode]);
+// Обработчик выбора даты в календаре
+const handleDateChange = (value: any) => {
+  if (value instanceof Date) {
+    // Обновляем выбранную дату
+    setSelectedDate(value);
+    // Загружаем расписание для этой даты
+    loadSchedules(value);
+    // Закрываем календарь
+    setTimeout(() => setShowCalendar(false), 300);
+  }
+};
   // Загружаем расписание при выборе даты в календаре
   useEffect(() => {
     if (viewMode === 'month') {
@@ -624,34 +635,29 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
 
                   {/* Выпадающий календарь */}
                   {showCalendar && viewMode === 'month' && (
-                    <div className="mb-4 p-4 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 shadow-lg">
-                      <div className="flex justify-between items-center mb-3">
-                        <span className="text-xs font-bold text-gray-700 dark:text-slate-300">
-                          📅 Выберите дату для просмотра смен
-                        </span>
-                        <button
-                          onClick={() => setShowCalendar(false)}
-                          className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-sm"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                      <Calendar
-                        onChange={(value) => {
-                          if (value instanceof Date) {
-                            setSelectedDate(value);
-                            setTimeout(() => setShowCalendar(false), 300);
-                          }
-                        }}
-                        value={selectedDate}
-                        locale="ru-RU"
-                        className="w-full border-0 shadow-none"
-                      />
-                      <div className="mt-2 text-[10px] text-gray-400 dark:text-slate-500 text-center">
-                        Выберите дату для просмотра смен
-                      </div>
-                    </div>
-                  )}
+  <div className="mb-4 p-4 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 shadow-lg">
+    <div className="flex justify-between items-center mb-3">
+      <span className="text-xs font-bold text-gray-700 dark:text-slate-300">
+        📅 Выберите дату для просмотра смен
+      </span>
+      <button
+        onClick={() => setShowCalendar(false)}
+        className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-sm"
+      >
+        ✕
+      </button>
+    </div>
+    <Calendar
+      onChange={handleDateChange}
+      value={selectedDate}
+      locale="ru-RU"
+      className="w-full border-0 shadow-none"
+    />
+    <div className="mt-2 text-[10px] text-gray-400 dark:text-slate-500 text-center">
+      Выберите дату для просмотра смен
+    </div>
+  </div>
+)}
 
                   <div className="space-y-2 mb-4">
                     {dbState.employees.filter(e => e.is_active).map(emp => {
