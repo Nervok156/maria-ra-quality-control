@@ -162,74 +162,81 @@ const calculateStatusAndPercent = (expiryDateStr: string, manufactureDateStr?: s
   // ✅ СОЗДАНИЕ ТОВАРА
   // ==========================================================
   const handleCreateProduct = async (e: React.FormEvent) => {
-    e.preventDefault();
+  e.preventDefault();
+  
+  if (!newProduct.name || !newProduct.barcode || !newProduct.expirationDate) {
+    alert("Пожалуйста, заполните основные поля: Название, Штрихкод и Срок годности!");
+    return;
+  }
+
+  // ✅ Логируем даты для проверки
+  console.log('🔄 Создаём товар с данными:', {
+    manufactureDate: newProduct.manufactureDate,
+    expirationDate: newProduct.expirationDate
+  });
+
+  try {
+    const trimmedBarcode = newProduct.barcode.trim();
+
+    const { data: existingProducts, error: searchError } = await supabase
+      .from('products')
+      .select('id, name, barcode')
+      .eq('barcode', trimmedBarcode);
+
+    if (searchError) {
+      console.error('❌ Ошибка поиска товара:', searchError);
+      throw searchError;
+    }
+
+    let productId;
+
+    if (existingProducts && existingProducts.length > 0) {
+      productId = existingProducts[0].id;
+      alert(`Товар "${existingProducts[0].name}" уже есть в базе. Добавляем новую партию.`);
+    } else {
+      const product = await createProduct({
+        barcode: trimmedBarcode,
+        name: newProduct.name,
+        category_id: newProduct.category,
+        base_price: Number(newProduct.price),
+        shelf_life_days: 7
+      });
+      
+      if (!product || !product.id) {
+        throw new Error('Не удалось создать товар');
+      }
+      productId = product.id;
+    }
+
+    // ✅ Используем даты из формы, если они есть
+    await createBatch({
+      product_id: productId,
+      store_id: 'store_1',
+      quantity: Number(newProduct.quantity),
+      manufacture_date: newProduct.manufactureDate || new Date().toISOString().split('T')[0],
+      expiration_date: newProduct.expirationDate,
+      location_id: newProduct.location || 'shelf_1'
+    });
+
+    await onDataChange();
     
-    if (!newProduct.name || !newProduct.barcode || !newProduct.expirationDate) {
-      alert("Пожалуйста, заполните основные поля: Название, Штрихкод и Срок годности!");
-      return;
-    }
-
-    try {
-      const trimmedBarcode = newProduct.barcode.trim();
-
-      const { data: existingProducts, error: searchError } = await supabase
-        .from('products')
-        .select('id, name, barcode')
-        .eq('barcode', trimmedBarcode);
-
-      if (searchError) {
-        console.error('❌ Ошибка поиска товара:', searchError);
-        throw searchError;
-      }
-
-      let productId;
-
-      if (existingProducts && existingProducts.length > 0) {
-        productId = existingProducts[0].id;
-        alert(`Товар "${existingProducts[0].name}" уже есть в базе. Добавляем новую партию.`);
-      } else {
-        const product = await createProduct({
-          barcode: trimmedBarcode,
-          name: newProduct.name,
-          category_id: newProduct.category,
-          base_price: Number(newProduct.price),
-          shelf_life_days: 7
-        });
-        
-        if (!product || !product.id) {
-          throw new Error('Не удалось создать товар');
-        }
-        productId = product.id;
-      }
-
-      await createBatch({
-        product_id: productId,
-        store_id: 'store_1',
-        quantity: Number(newProduct.quantity),
-        manufacture_date: newProduct.manufactureDate || new Date().toISOString().split('T')[0],
-        expiration_date: newProduct.expirationDate,
-        location_id: newProduct.location || 'shelf_1'
-      });
-
-      await onDataChange();
-      
-      setShowAddModal(false);
-      setNewProduct({
-        barcode: '',
-        name: '',
-        category: 'dairy',
-        price: 0,
-        quantity: 1,
-        expirationDate: '',
-        manufactureDate: '',
-        location: 'shelf_1'
-      });
-      
-    } catch (error) {
-      console.error('❌ Ошибка при создании товара:', error);
-      alert('Не удалось создать товар. Проверьте подключение к базе данных.');
-    }
-  };
+    setShowAddModal(false);
+    setNewProduct({
+      barcode: '',
+      name: '',
+      category: 'dairy',
+      price: 0,
+      quantity: 1,
+      expirationDate: '',
+      manufactureDate: '',
+      location: 'shelf_1'
+    });
+    
+  } catch (error) {
+    console.error('❌ Ошибка при создании товара:', error);
+    alert('Не удалось создать товар. Проверьте подключение к базе данных.');
+  }
+};
 
   // ==========================================================
   // ✅ ФУНКЦИЯ УЦЕНКИ (с проверкой прав и статуса)
