@@ -36,7 +36,6 @@ interface RoleWorkspaceProps {
   currentUser: { id: string; name: string; role: string };
   onDbUpdate: () => Promise<void>;
 }
-const [showCalendar, setShowCalendar] = useState(false);
 function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspaceProps) {
   const [dbState, setDbState] = useState<DBTableData>(getDBState());
   
@@ -70,6 +69,8 @@ function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspaceProps) {
 
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [viewMode, setViewMode] = useState<'day' | 'month'>('day');
+
+  const [showCalendar, setShowCalendar] = useState(false);
 
   const loadDataFromSupabase = async () => {
     try {
