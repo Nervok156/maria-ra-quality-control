@@ -1,5 +1,6 @@
 @import "tailwindcss";
 
+/*@custom-variant dark (&:where(.dark, .dark *));*/
 /* Стили для календаря */
 .react-calendar {
   border: none !important;
