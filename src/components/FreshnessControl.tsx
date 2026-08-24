@@ -26,8 +26,6 @@ export default function FreshnessControl({ products, setProducts, currentUser, o
     localStorage.setItem('maria_ra_active_sub_tab', activeSubTab);
   }, [activeSubTab]);
 
-  const simulatedToday = '2026-06-30';
-
   const handlePrint = () => {
     window.print();
   };
@@ -35,9 +33,13 @@ export default function FreshnessControl({ products, setProducts, currentUser, o
   // ✅ Проверка прав на уценку
   const canMarkdown = currentUser.role === 'Директор магазина' || currentUser.role === 'Старший товаровед';
 
+  // ✅ Helper to calculate status based on expiry date (используем реальную дату)
   const calculateStatusAndPercent = (expiryDateStr: string, manufactureDateStr?: string) => {
-    const today = new Date(simulatedToday);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
     const expiry = new Date(expiryDateStr);
+    expiry.setHours(0, 0, 0, 0);
+    
     const diffTime = expiry.getTime() - today.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     
@@ -48,6 +50,7 @@ export default function FreshnessControl({ products, setProducts, currentUser, o
     let totalLife = 10;
     if (manufactureDateStr) {
       const manufacture = new Date(manufactureDateStr);
+      manufacture.setHours(0, 0, 0, 0);
       totalLife = Math.max(1, Math.ceil((expiry.getTime() - manufacture.getTime()) / (1000 * 60 * 60 * 24)));
     }
     
@@ -135,10 +138,10 @@ export default function FreshnessControl({ products, setProducts, currentUser, o
     }
     
     const template = productTemplates[idx];
-    const today = new Date(simulatedToday);
-    const mDate = new Date(simulatedToday);
+    const today = new Date();
+    const mDate = new Date();
     mDate.setDate(today.getDate() - 2);
-    const eDate = new Date(simulatedToday);
+    const eDate = new Date();
     eDate.setDate(today.getDate() + (template.shelfLifeDays - 2));
 
     const format = (d: Date) => d.toISOString().split('T')[0];
@@ -884,7 +887,7 @@ export default function FreshnessControl({ products, setProducts, currentUser, o
             <div className="text-center my-6">
               <h2 className="text-base font-black uppercase">АКТ № {Math.floor(Math.random() * 900) + 100}</h2>
               <h3 className="text-sm font-bold mt-1">о списании товаров</h3>
-              <p className="mt-2 font-bold">от {simulatedToday.split('-').reverse().join('.')}</p>
+              <p className="mt-2 font-bold">от {new Date().toISOString().split('T')[0].split('-').reverse().join('.')}</p>
             </div>
 
             <p className="mb-4 leading-relaxed">
@@ -1269,7 +1272,7 @@ export default function FreshnessControl({ products, setProducts, currentUser, o
         </div>
       )}
 
-      {/* ✅ MODAL: MARKDOWN (с проверкой статуса) */}
+      {/* MODAL: MARKDOWN */}
       {showMarkdownModal && selectedProduct && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 no-print">
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-800 shadow-2xl w-full max-w-sm p-6 animate-zoom-in transition-colors duration-200">
@@ -1277,7 +1280,6 @@ export default function FreshnessControl({ products, setProducts, currentUser, o
               Уценка скоропортящегося товара
             </h3>
             
-            {/* ✅ Проверка статуса товара */}
             {selectedProduct.status !== 'expiring_soon' && selectedProduct.status !== 'marked_down' && (
               <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30 rounded-lg p-3 my-3">
                 <p className="text-xs text-amber-800 dark:text-amber-300 font-bold">
@@ -1390,6 +1392,7 @@ export default function FreshnessControl({ products, setProducts, currentUser, o
           </div>
         </div>
       )}
+
     </div>
   );
 }
