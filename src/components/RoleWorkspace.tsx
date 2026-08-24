@@ -77,7 +77,16 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [viewMode, setViewMode] = useState<'day' | 'month'>('day');
   const [showCalendar, setShowCalendar] = useState(false);
-
+// ==========================================================
+// ✅ ПРОВЕРКА: является ли дата прошедшей
+// ==========================================================
+const isPastDate = (date: Date) => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const checkDate = new Date(date);
+  checkDate.setHours(0, 0, 0, 0);
+  return checkDate < today;
+};
   const loadDataFromSupabase = async () => {
     try {
       console.log('📥 Загружаем финансовые данные из Supabase...');
@@ -655,10 +664,17 @@ useEffect(() => {
       </button>
     </div>
     <Calendar
-      onChange={handleDateChange}
-      value={selectedDate}
-      locale="ru-RU"
-      className="w-full border-0 shadow-none"
+  onChange={handleDateChange}
+  value={selectedDate}
+  locale="ru-RU"
+  className="w-full border-0 shadow-none"
+  tileDisabled={({ date }) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const checkDate = new Date(date);
+    checkDate.setHours(0, 0, 0, 0);
+    return checkDate < today;
+  }}
     />
     <div className="mt-2 text-[10px] text-gray-400 dark:text-slate-500 text-center">
       Выберите дату для просмотра смен
@@ -686,9 +702,14 @@ useEffect(() => {
     return (
       <div key={emp.id} className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 p-2.5 rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-xs">
         <div>
-          <span className="font-extrabold text-gray-900 dark:text-slate-100 block">{emp.name}</span>
-          <span className="text-[9px] text-gray-400 font-bold block">{dbState.roles.find(r => r.id === emp.role_id)?.name}</span>
-        </div>
+  <span className="font-extrabold text-gray-900 dark:text-slate-100 block">{emp.name}</span>
+  <span className="text-[9px] text-gray-400 font-bold block">{dbState.roles.find(r => r.id === emp.role_id)?.name}</span>
+  {isPastDate(selectedDate) && (
+    <span className="text-[8px] text-red-500 dark:text-red-400 font-bold block mt-0.5">
+      ⚠️ Дата прошла — редактирование заблокировано
+    </span>
+  )}
+</div>
 
         <div className="flex items-center space-x-2 w-full sm:w-auto justify-between sm:justify-end">
           <span className={`px-1.5 py-0.5 text-[9px] font-black uppercase rounded ${
@@ -702,48 +723,57 @@ useEffect(() => {
           </span>
 
           <select
-            value={currentStatus === 'Выходной' ? 'off' : currentShift}
-            onChange={async (e) => {
-              const val = e.target.value;
-              let shiftName = '—';
-              let status = 'Выходной';
-              let dayType = 'weekday';
-              
-              if (val === 'off') {
-                shiftName = '—';
-                status = 'Выходной';
-              } else if (val.includes('Дневная')) {
-                shiftName = 'Дневная смена (08:00 - 15:30)';
-                status = 'Работает';
-                dayType = 'weekday';
-              } else {
-                shiftName = 'Вечерняя смена (15:30 - 23:00)';
-                status = 'Работает';
-                dayType = 'weekday';
-              }
-              
-              console.log('💾 Сохраняем смену на дату:', selectedDate.toLocaleDateString('ru-RU'));
-              
-              const result = await updateScheduleForDate(
-                emp.id,
-                selectedDate,
-                shiftName,
-                status,
-                dayType
-              );
-              
-              if (result) {
-                await loadSchedules(selectedDate);
-                await triggerUpdate();
-                console.log('✅ Расписание обновлено на', selectedDate.toLocaleDateString('ru-RU'));
-              }
-            }}
-            className="bg-gray-50 dark:bg-slate-800 border border-gray-150 dark:border-slate-750 rounded px-1.5 py-0.5 text-[10px] font-bold text-gray-700 dark:text-slate-300 focus:outline-none"
-          >
-            <option value="off">Выходной</option>
-            <option value="Дневная смена (08:00 - 15:30)">Дневная смена</option>
-            <option value="Вечерняя смена (15:30 - 23:00)">Вечерняя смена</option>
-          </select>
+  value={currentStatus === 'Выходной' ? 'off' : currentShift}
+  onChange={async (e) => {
+    // ✅ Проверка на прошедшую дату
+    if (isPastDate(selectedDate)) {
+      alert('⚠️ Нельзя изменять расписание на прошедшие даты!');
+      return;
+    }
+    
+    const val = e.target.value;
+    let shiftName = '—';
+    let status = 'Выходной';
+    let dayType = 'weekday';
+    
+    if (val === 'off') {
+      shiftName = '—';
+      status = 'Выходной';
+    } else if (val.includes('Дневная')) {
+      shiftName = 'Дневная смена (08:00 - 15:30)';
+      status = 'Работает';
+      dayType = 'weekday';
+    } else {
+      shiftName = 'Вечерняя смена (15:30 - 23:00)';
+      status = 'Работает';
+      dayType = 'weekday';
+    }
+    
+    const result = await updateScheduleForDate(
+      emp.id,
+      selectedDate,
+      shiftName,
+      status,
+      dayType
+    );
+    
+    if (result) {
+      await loadSchedules(selectedDate);
+      await triggerUpdate();
+      console.log('✅ Расписание обновлено на', selectedDate.toLocaleDateString('ru-RU'));
+    }
+  }}
+  disabled={isPastDate(selectedDate)}
+  className={`bg-gray-50 dark:bg-slate-800 border border-gray-150 dark:border-slate-750 rounded px-1.5 py-0.5 text-[10px] font-bold ${
+    isPastDate(selectedDate) 
+      ? 'text-gray-400 cursor-not-allowed opacity-50' 
+      : 'text-gray-700 dark:text-slate-300'
+  } focus:outline-none`}
+>
+  <option value="off">Выходной</option>
+  <option value="Дневная смена (08:00 - 15:30)">Дневная смена</option>
+  <option value="Вечерняя смена (15:30 - 23:00)">Вечерняя смена</option>
+</select>
         </div>
       </div>
     );
