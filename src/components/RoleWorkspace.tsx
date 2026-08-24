@@ -163,34 +163,41 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
       window.removeEventListener('maria_ra_db_updated', loadDataFromSupabase);
     };
   }, []);
-// Загружаем расписание при смене дня (без обновления selectedDate для месяца)
+// Загружаем расписание при смене дня (только в режиме "День")
 useEffect(() => {
   if (viewMode === 'day') {
     let date = new Date();
     if (selectedScheduleDay === 'tomorrow') {
       date.setDate(date.getDate() + 1);
     }
-    setSelectedDate(date);
-    loadSchedules(date);
+    const newDate = new Date(date);
+    newDate.setHours(0, 0, 0, 0);
+    setSelectedDate(newDate);
+    loadSchedules(newDate);
   }
 }, [selectedScheduleDay, viewMode]);
 // Обработчик выбора даты в календаре
 const handleDateChange = (value: any) => {
   if (value instanceof Date) {
-    // Обновляем выбранную дату
-    setSelectedDate(value);
+    const newDate = new Date(value);
+    newDate.setHours(0, 0, 0, 0);
+    
+    console.log('📅 Выбрана дата:', newDate.toLocaleDateString('ru-RU'));
+    
+    // Устанавливаем выбранную дату
+    setSelectedDate(newDate);
     // Загружаем расписание для этой даты
-    loadSchedules(value);
+    loadSchedules(newDate);
     // Закрываем календарь
     setTimeout(() => setShowCalendar(false), 300);
   }
 };
-  // Загружаем расписание при выборе даты в календаре
-  useEffect(() => {
-    if (viewMode === 'month') {
-      loadSchedules(selectedDate);
-    }
-  }, [selectedDate, viewMode]);
+// Загружаем расписание при изменении selectedDate (для режима "Месяц")
+useEffect(() => {
+  if (viewMode === 'month' && selectedDate) {
+    loadSchedules(selectedDate);
+  }
+}, [selectedDate, viewMode]);
 
   // Automatic customer sales simulator
   useEffect(() => {
@@ -659,85 +666,89 @@ const handleDateChange = (value: any) => {
   </div>
 )}
 
-                  <div className="space-y-2 mb-4">
-                    {dbState.employees.filter(e => e.is_active).map(emp => {
-                      // Ищем расписание для этого сотрудника на выбранную дату
-                      const sched = schedules.find(s => s.employee_id === emp.id);
-                      
-                      const currentShift = sched ? sched.shift_name : '—';
-                      const currentStatus = sched ? sched.status : 'Выходной';
+                 <div className="space-y-2 mb-4">
+  {/* Отображение текущей даты */}
+  <div className="text-[10px] text-gray-400 dark:text-slate-500 mb-2">
+    {viewMode === 'month' ? (
+      <span>📅 Текущая дата: <b>{selectedDate.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}</b></span>
+    ) : (
+      <span>📅 {selectedScheduleDay === 'today' ? 'Сегодня' : 'Завтра'}: <b>{selectedDate.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}</b></span>
+    )}
+  </div>
 
-                      return (
-                        <div key={emp.id} className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 p-2.5 rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-xs">
-                          <div>
-                            <span className="font-extrabold text-gray-900 dark:text-slate-100 block">{emp.name}</span>
-                            <span className="text-[9px] text-gray-400 font-bold block">{dbState.roles.find(r => r.id === emp.role_id)?.name}</span>
-                            {viewMode === 'month' && (
-                              <span className="text-[8px] text-gray-400 dark:text-slate-500 block mt-0.5">
-                                {selectedDate.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}
-                              </span>
-                            )}
-                          </div>
+  {dbState.employees.filter(e => e.is_active).map(emp => {
+    // Ищем расписание для этого сотрудника на выбранную дату
+    const sched = schedules.find(s => s.employee_id === emp.id);
+    
+    const currentShift = sched ? sched.shift_name : '—';
+    const currentStatus = sched ? sched.status : 'Выходной';
 
-                          <div className="flex items-center space-x-2 w-full sm:w-auto justify-between sm:justify-end">
-                            <span className={`px-1.5 py-0.5 text-[9px] font-black uppercase rounded ${
-                              currentStatus === 'Выходной' 
-                                ? 'bg-gray-100 text-gray-500 dark:bg-slate-800 dark:text-slate-400' 
-                                : currentShift.includes('Дневная') 
-                                  ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400'
-                                  : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400'
-                            }`}>
-                              {currentStatus === 'Выходной' ? 'Выходной' : currentShift.split(' ')[0]}
-                            </span>
+    return (
+      <div key={emp.id} className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 p-2.5 rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-xs">
+        <div>
+          <span className="font-extrabold text-gray-900 dark:text-slate-100 block">{emp.name}</span>
+          <span className="text-[9px] text-gray-400 font-bold block">{dbState.roles.find(r => r.id === emp.role_id)?.name}</span>
+        </div>
 
-                            <select
-                              value={currentStatus === 'Выходной' ? 'off' : currentShift}
-                              onChange={async (e) => {
-                                const val = e.target.value;
-                                let shiftName = '—';
-                                let status = 'Выходной';
-                                let dayType = 'weekday';
-                                
-                                if (val === 'off') {
-                                  shiftName = '—';
-                                  status = 'Выходной';
-                                } else if (val.includes('Дневная')) {
-                                  shiftName = 'Дневная смена (08:00 - 15:30)';
-                                  status = 'Работает';
-                                  dayType = 'weekday';
-                                } else {
-                                  shiftName = 'Вечерняя смена (15:30 - 23:00)';
-                                  status = 'Работает';
-                                  dayType = 'weekday';
-                                }
-                                
-                                // Сохраняем в Supabase
-                                const result = await updateScheduleForDate(
-                                  emp.id,
-                                  selectedDate,
-                                  shiftName,
-                                  status,
-                                  dayType
-                                );
-                                
-                                if (result) {
-                                  // Обновляем локальное состояние
-                                  await loadSchedules(selectedDate);
-                                  await triggerUpdate();
-                                  console.log('✅ Расписание обновлено');
-                                }
-                              }}
-                              className="bg-gray-50 dark:bg-slate-800 border border-gray-150 dark:border-slate-750 rounded px-1.5 py-0.5 text-[10px] font-bold text-gray-700 dark:text-slate-300 focus:outline-none"
-                            >
-                              <option value="off">Выходной</option>
-                              <option value="Дневная смена (08:00 - 15:30)">Дневная смена</option>
-                              <option value="Вечерняя смена (15:30 - 23:00)">Вечерняя смена</option>
-                            </select>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+        <div className="flex items-center space-x-2 w-full sm:w-auto justify-between sm:justify-end">
+          <span className={`px-1.5 py-0.5 text-[9px] font-black uppercase rounded ${
+            currentStatus === 'Выходной' 
+              ? 'bg-gray-100 text-gray-500 dark:bg-slate-800 dark:text-slate-400' 
+              : currentShift.includes('Дневная') 
+                ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400'
+                : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400'
+          }`}>
+            {currentStatus === 'Выходной' ? 'Выходной' : currentShift.split(' ')[0]}
+          </span>
+
+          <select
+            value={currentStatus === 'Выходной' ? 'off' : currentShift}
+            onChange={async (e) => {
+              const val = e.target.value;
+              let shiftName = '—';
+              let status = 'Выходной';
+              let dayType = 'weekday';
+              
+              if (val === 'off') {
+                shiftName = '—';
+                status = 'Выходной';
+              } else if (val.includes('Дневная')) {
+                shiftName = 'Дневная смена (08:00 - 15:30)';
+                status = 'Работает';
+                dayType = 'weekday';
+              } else {
+                shiftName = 'Вечерняя смена (15:30 - 23:00)';
+                status = 'Работает';
+                dayType = 'weekday';
+              }
+              
+              console.log('💾 Сохраняем смену на дату:', selectedDate.toLocaleDateString('ru-RU'));
+              
+              const result = await updateScheduleForDate(
+                emp.id,
+                selectedDate,
+                shiftName,
+                status,
+                dayType
+              );
+              
+              if (result) {
+                await loadSchedules(selectedDate);
+                await triggerUpdate();
+                console.log('✅ Расписание обновлено на', selectedDate.toLocaleDateString('ru-RU'));
+              }
+            }}
+            className="bg-gray-50 dark:bg-slate-800 border border-gray-150 dark:border-slate-750 rounded px-1.5 py-0.5 text-[10px] font-bold text-gray-700 dark:text-slate-300 focus:outline-none"
+          >
+            <option value="off">Выходной</option>
+            <option value="Дневная смена (08:00 - 15:30)">Дневная смена</option>
+            <option value="Вечерняя смена (15:30 - 23:00)">Вечерняя смена</option>
+          </select>
+        </div>
+      </div>
+    );
+  })}
+</div>
                 </div>
 
                 <form onSubmit={handleHireEmployee} className="space-y-2 bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 p-2.5 rounded-lg">
