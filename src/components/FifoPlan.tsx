@@ -17,15 +17,17 @@ export default function FifoPlan({ products, currentUser }: FifoPlanProps) {
   const [rotationLogged, setRotationLogged] = useState<string | null>(null);
   const [checkedSteps, setCheckedSteps] = useState<Record<number, boolean>>({});
 
-  const simulatedToday = '2026-06-30';
+const simulatedToday = new Date().toISOString().split('T')[0];
 
-  // Helper to calculate remaining days
-  const getDaysRemaining = (expiryDateStr: string) => {
-    const today = new Date(simulatedToday);
-    const expiry = new Date(expiryDateStr);
-    const diffTime = expiry.getTime() - today.getTime();
-    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  };
+  // Используем реальную текущую дату
+const getDaysRemaining = (expiryDateStr: string) => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const expiry = new Date(expiryDateStr);
+  expiry.setHours(0, 0, 0, 0);
+  const diffTime = expiry.getTime() - today.getTime();
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+};
 
   // Group active, non-written-off products by name to find different batches
   const activeProducts = products.filter(p => p.status !== 'written_off');
