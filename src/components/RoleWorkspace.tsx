@@ -36,7 +36,7 @@ interface RoleWorkspaceProps {
   currentUser: { id: string; name: string; role: string };
   onDbUpdate: () => Promise<void>;
 }
-
+const [showCalendar, setShowCalendar] = useState(false);
 function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspaceProps) {
   const [dbState, setDbState] = useState<DBTableData>(getDBState());
   
@@ -560,7 +560,7 @@ function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspaceProps) {
                 <div>
                   <div className="flex justify-between items-center mb-3">
   <h5 className="text-[11px] font-black text-gray-900 dark:text-slate-100 uppercase tracking-wider flex items-center space-x-1.5">
-    <Calendar className="w-4 h-4 text-green-600" />
+    <CalendarIcon className="w-4 h-4 text-green-600" />
     <span>График рабочих смен персонала</span>
   </h5>
   
@@ -572,13 +572,47 @@ function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspaceProps) {
       День
     </button>
     <button
-      onClick={() => setViewMode('month')}
+      onClick={() => {
+        setViewMode('month');
+        setShowCalendar(!showCalendar);
+      }}
       className={`px-2 py-0.5 text-[9px] font-extrabold uppercase rounded-md transition-all ${viewMode === 'month' ? 'bg-green-600 text-white shadow-xs' : 'bg-gray-200 dark:bg-slate-800 text-gray-500 dark:text-slate-400 hover:text-gray-800'}`}
     >
-      Месяц
+      Месяц {showCalendar ? '▲' : '▼'}
     </button>
   </div>
 </div>
+{/* Выпадающий календарь */}
+{showCalendar && viewMode === 'month' && (
+  <div className="mb-4 p-4 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 shadow-lg">
+    <div className="flex justify-between items-center mb-3">
+      <span className="text-xs font-bold text-gray-700 dark:text-slate-300">
+        📅 Выберите дату для просмотра смен
+      </span>
+      <button
+        onClick={() => setShowCalendar(false)}
+        className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-sm"
+      >
+        ✕
+      </button>
+    </div>
+    <Calendar
+      onChange={(value) => {
+        if (value instanceof Date) {
+          setSelectedDate(value);
+          // Автоматически закрываем календарь после выбора
+          setTimeout(() => setShowCalendar(false), 300);
+        }
+      }}
+      value={selectedDate}
+      locale="ru-RU"
+      className="w-full border-0 shadow-none"
+    />
+    <div className="mt-2 text-[10px] text-gray-400 dark:text-slate-500 text-center">
+      Выберите дату для просмотра смен
+    </div>
+  </div>
+)}
 {viewMode === 'month' && (
   <div className="mb-4 react-calendar-wrapper">
     <Calendar
@@ -601,14 +635,27 @@ function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspaceProps) {
 
                   <div className="space-y-2 mb-4">
   {dbState.employees.filter(e => e.is_active).map(emp => {
-    // Ищем расписание
     let sched;
+    
     if (viewMode === 'month') {
-      // Для месяца показываем расписание на сегодня (как пример)
+      // Для месяца показываем расписание на выбранную дату
+      const dayOfWeek = selectedDate.getDay();
+      const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+      
+      // Ищем расписание на выбранную дату
       sched = dbState.employee_schedules?.find(s => 
         s.employee_id === emp.id && 
-        s.day_type === 'today'
+        (isWeekend ? s.day_type === 'weekend' : s.day_type === 'weekday')
       );
+      
+      // Если нет расписания на выходные/будни, показываем сегодня
+      if (!sched) {
+        sched = dbState.employee_schedules?.find(s => 
+          s.employee_id === emp.id && 
+          s.day_type === 'today'
+        );
+      }
+      
       // Если нет расписания на сегодня, показываем завтра
       if (!sched) {
         sched = dbState.employee_schedules?.find(s => 
@@ -631,6 +678,11 @@ function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspaceProps) {
         <div>
           <span className="font-extrabold text-gray-900 dark:text-slate-100 block">{emp.name}</span>
           <span className="text-[9px] text-gray-400 font-bold block">{dbState.roles.find(r => r.id === emp.role_id)?.name}</span>
+          {viewMode === 'month' && (
+            <span className="text-[8px] text-gray-400 dark:text-slate-500 block mt-0.5">
+              {selectedDate.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}
+            </span>
+          )}
         </div>
 
         <div className="flex items-center space-x-2 w-full sm:w-auto justify-between sm:justify-end">
