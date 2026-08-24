@@ -614,22 +614,7 @@ function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspaceProps) {
     </div>
   </div>
 )}
-{viewMode === 'month' && (
-  <div className="mb-4 react-calendar-wrapper">
-    <Calendar
-      onChange={(value) => {
-        if (value instanceof Date) {
-          setSelectedDate(value);
-        }
-      }}
-      value={selectedDate}
-      locale="ru-RU"
-    />
-    <div className="mt-2 text-[10px] text-gray-400 dark:text-slate-500 text-center">
-      Выберите дату для просмотра смен
-    </div>
-  </div>
-)}
+
                   <p className="text-[10px] text-gray-500 dark:text-slate-400 font-medium mb-3 leading-relaxed">
                     Планирование выходов сотрудников розницы (5 человек, 2 рабочие смены). Изменения пишутся в СУБД-таблицу <span className="font-mono text-emerald-600 dark:text-emerald-400">employee_schedules</span>.
                   </p>
