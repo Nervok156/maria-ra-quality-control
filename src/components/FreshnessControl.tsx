@@ -34,14 +34,14 @@ export default function FreshnessControl({ products, setProducts, currentUser, o
   const canMarkdown = currentUser.role === 'Директор магазина' || currentUser.role === 'Старший товаровед';
 
   // ✅ Helper to calculate status based on expiry date (используем реальную дату)
-  const calculateStatusAndPercent = (expiryDateStr: string, manufactureDateStr?: string) => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const expiry = new Date(expiryDateStr);
-    expiry.setHours(0, 0, 0, 0);
-    
-    const diffTime = expiry.getTime() - today.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+const calculateStatusAndPercent = (expiryDateStr: string, manufactureDateStr?: string) => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const expiry = new Date(expiryDateStr);
+  expiry.setHours(0, 0, 0, 0);
+  
+  const diffTime = expiry.getTime() - today.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     
     if (diffDays <= 0) {
       return { status: 'expired' as const, percent: 0, daysRemaining: diffDays };
