@@ -252,6 +252,16 @@ export async function approveWriteoffAct(id: string, approverId: string) {
   return data?.[0];
 }
 
+export async function exportTo1C(id: string) {
+  const { data, error } = await supabase
+    .from('writeoff_acts')
+    .update({ is_exported_to_1c: true })
+    .eq('id', id)
+    .select();
+  if (error) throw error;
+  return data?.[0];
+}
+
 // ==========================================================
 // 11. РАБОТА СО СТРОКАМИ АКТОВ СПИСАНИЯ
 // ==========================================================
@@ -358,7 +368,7 @@ export async function createPriceHistory(entry: any) {
 }
 
 // ==========================================================
-// 15. РАБОТА С РАСПИСАНИЕМ СОТРУДНИКОВ
+// 15. РАБОТА С РАСПИСАНИЕМ СОТРУДНИКОВ (СТАРАЯ ВЕРСИЯ)
 // ==========================================================
 export async function getEmployeeSchedules() {
   const { data, error } = await supabase
@@ -507,7 +517,6 @@ export async function getFullState() {
 // ==========================================================
 export async function getActiveProducts() {
   try {
-    // Получаем все партии
     const { data: batches, error: batchesError } = await supabase
       .from('batches')
       .select('*')
@@ -515,26 +524,22 @@ export async function getActiveProducts() {
     
     if (batchesError) throw batchesError;
 
-    // Получаем все товары
     const { data: products, error: productsError } = await supabase
       .from('products')
       .select('*');
     
     if (productsError) throw productsError;
 
-    // Получаем все уценки
     const { data: markdowns, error: markdownsError } = await supabase
       .from('markdown_log')
       .select('*');
     
     if (markdownsError) throw markdownsError;
 
-    // Формируем список активных товаров с правильными типами
     const activeProducts: Product[] = batches.map((batch: any) => {
       const product = products.find((p: any) => p.id === batch.product_id);
       const markdown = markdowns.find((m: any) => m.batch_id === batch.id);
       
-      // Определяем статус с правильным типом
       const today = new Date();
       const expiry = new Date(batch.expiration_date);
       const diffDays = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
@@ -570,19 +575,18 @@ export async function getActiveProducts() {
 }
 
 // ==========================================================
-// 20. ✅ НОВАЯ ФУНКЦИЯ: ЗАПИСЬ ПРОДАЖИ В SUPABASE
+// 20. ЗАПИСЬ ПРОДАЖИ В SUPABASE
 // ==========================================================
 export async function recordSaleInSupabase(productId: string, quantity: number, unitPrice: number, batchId: string) {
   try {
     console.log('🔄 Записываем продажу в Supabase...');
     console.log(`📦 Товар: ${productId}, Кол-во: ${quantity}, Цена: ${unitPrice}, Партия: ${batchId}`);
 
-    // 1. Проверяем, есть ли такая партия
     const { data: batch, error: batchError } = await supabase
       .from('batches')
       .select('quantity, product_id')
       .eq('id', batchId)
-      .maybeSingle();  // ← Используем maybeSingle вместо single
+      .maybeSingle();
     
     if (batchError) {
       console.error('❌ Ошибка поиска партии:', batchError);
@@ -599,7 +603,6 @@ export async function recordSaleInSupabase(productId: string, quantity: number, 
       return false;
     }
 
-    // 2. Обновляем количество в партии
     const newQuantity = batch.quantity - quantity;
     const { error: updateError } = await supabase
       .from('batches')
@@ -611,7 +614,6 @@ export async function recordSaleInSupabase(productId: string, quantity: number, 
       return false;
     }
 
-    // 3. Если количество стало 0, помечаем партию как распроданную
     if (newQuantity <= 0) {
       await supabase
         .from('batches')
@@ -620,7 +622,6 @@ export async function recordSaleInSupabase(productId: string, quantity: number, 
       console.log('📦 Партия полностью распродана');
     }
 
-    // 4. Записываем продажу в sales_log
     const totalSum = quantity * unitPrice;
     const { error: saleError } = await supabase
       .from('sales_log')
@@ -643,5 +644,100 @@ export async function recordSaleInSupabase(productId: string, quantity: number, 
   } catch (error) {
     console.error('❌ Ошибка при записи продажи:', error);
     return false;
+  }
+}
+
+// ==========================================================
+// 21. РАБОТА С РАСПИСАНИЕМ СОТРУДНИКОВ (ПО ДАТАМ) - НОВАЯ ВЕРСИЯ
+// ==========================================================
+
+export async function getSchedulesByDate(date: Date) {
+  const dateStr = date.toISOString().split('T')[0];
+  const { data, error } = await supabase
+    .from('employee_schedules')
+    .select('*, employees(*)')
+    .eq('schedule_date', dateStr);
+  
+  if (error) {
+    console.error('❌ Ошибка получения расписания:', error);
+    throw error;
+  }
+  return data || [];
+}
+
+export async function getSchedulesForMonth(year: number, month: number) {
+  const startDate = new Date(year, month, 1);
+  const endDate = new Date(year, month + 1, 0);
+  
+  const startStr = startDate.toISOString().split('T')[0];
+  const endStr = endDate.toISOString().split('T')[0];
+  
+  const { data, error } = await supabase
+    .from('employee_schedules')
+    .select('*, employees(*)')
+    .gte('schedule_date', startStr)
+    .lte('schedule_date', endStr);
+  
+  if (error) {
+    console.error('❌ Ошибка получения расписания на месяц:', error);
+    throw error;
+  }
+  return data || [];
+}
+
+export async function updateScheduleForDate(
+  employeeId: string, 
+  date: Date, 
+  shiftName: string, 
+  status: string,
+  dayType: string
+) {
+  const dateStr = date.toISOString().split('T')[0];
+  
+  const { data: existing, error: findError } = await supabase
+    .from('employee_schedules')
+    .select('id')
+    .eq('employee_id', employeeId)
+    .eq('schedule_date', dateStr)
+    .maybeSingle();
+  
+  if (findError) {
+    console.error('❌ Ошибка поиска расписания:', findError);
+    return null;
+  }
+  
+  if (existing) {
+    const { data, error } = await supabase
+      .from('employee_schedules')
+      .update({
+        shift_name: shiftName,
+        status: status,
+        day_type: dayType
+      })
+      .eq('id', existing.id)
+      .select();
+    
+    if (error) {
+      console.error('❌ Ошибка обновления расписания:', error);
+      return null;
+    }
+    return data?.[0];
+  } else {
+    const { data, error } = await supabase
+      .from('employee_schedules')
+      .insert([{
+        employee_id: employeeId,
+        schedule_date: dateStr,
+        shift_name: shiftName,
+        status: status,
+        day_type: dayType
+      }])
+      .select();
+    
+    if (error) {
+      console.error('❌ Ошибка создания расписания:', error);
+      return null;
+    }
+    return data?.[0];
   }
 }

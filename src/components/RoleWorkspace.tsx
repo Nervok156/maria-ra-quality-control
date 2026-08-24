@@ -5,6 +5,8 @@ import {
   Truck, ClipboardCheck, ScanLine, Barcode, Calendar as CalendarIcon, MapPin, ListPlus, Send, CircleDollarSign, Play, Square, ShoppingCart,
   Zap, CreditCard
 } from 'lucide-react';
+import Calendar from 'react-calendar';
+import 'react-calendar/dist/Calendar.css';
 import { 
   getDBState, saveDBState, addTelemetry, DBTableData, 
   getActiveProductsFromDB, addProductToDB, addBatchToDB, 
@@ -28,15 +30,18 @@ import {
   getPriceHistory,
   getTelemetry,
   getEmployeeSchedules,
-  recordSaleInSupabase
+  recordSaleInSupabase,
+  getSchedulesByDate,
+  getSchedulesForMonth,
+  updateScheduleForDate
 } from '../api/databaseAPI';
-import Calendar from 'react-calendar';
-import 'react-calendar/dist/Calendar.css';
+
 interface RoleWorkspaceProps {
   currentUser: { id: string; name: string; role: string };
   onDbUpdate: () => Promise<void>;
 }
-function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspaceProps) {
+
+export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspaceProps) {
   const [dbState, setDbState] = useState<DBTableData>(getDBState());
   
   // States for Director workspace
@@ -67,9 +72,10 @@ function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspaceProps) {
   const [salesSimulationActive, setSalesSimulationActive] = useState(false);
   const [liveSalesJournal, setLiveSalesJournal] = useState<{ id: string; text: string; time: string }[]>([]);
 
+  // States for calendar
+  const [schedules, setSchedules] = useState<any[]>([]);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [viewMode, setViewMode] = useState<'day' | 'month'>('day');
-
   const [showCalendar, setShowCalendar] = useState(false);
 
   const loadDataFromSupabase = async () => {
@@ -138,6 +144,17 @@ function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspaceProps) {
     }
   };
 
+  const loadSchedules = async (date: Date) => {
+    try {
+      console.log('📥 Загружаем расписание на', date.toLocaleDateString('ru-RU'));
+      const data = await getSchedulesByDate(date);
+      setSchedules(data);
+      console.log('✅ Загружено записей:', data.length);
+    } catch (error) {
+      console.error('❌ Ошибка загрузки расписания:', error);
+    }
+  };
+
   useEffect(() => {
     loadDataFromSupabase();
     
@@ -146,6 +163,23 @@ function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspaceProps) {
       window.removeEventListener('maria_ra_db_updated', loadDataFromSupabase);
     };
   }, []);
+
+  // Загружаем расписание при смене дня
+  useEffect(() => {
+    let date = new Date();
+    if (selectedScheduleDay === 'tomorrow') {
+      date.setDate(date.getDate() + 1);
+    }
+    setSelectedDate(date);
+    loadSchedules(date);
+  }, [selectedScheduleDay]);
+
+  // Загружаем расписание при выборе даты в календаре
+  useEffect(() => {
+    if (viewMode === 'month') {
+      loadSchedules(selectedDate);
+    }
+  }, [selectedDate, viewMode]);
 
   // Automatic customer sales simulator
   useEffect(() => {
@@ -560,151 +594,144 @@ function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspaceProps) {
               <div className="bg-gray-50/50 dark:bg-slate-850/40 border border-gray-150 dark:border-slate-800/80 rounded-xl p-4 flex flex-col justify-between">
                 <div>
                   <div className="flex justify-between items-center mb-3">
-  <h5 className="text-[11px] font-black text-gray-900 dark:text-slate-100 uppercase tracking-wider flex items-center space-x-1.5">
-    <CalendarIcon className="w-4 h-4 text-green-600" />
-    <span>График рабочих смен персонала</span>
-  </h5>
-  
-  <div className="flex items-center space-x-2">
-    <button
-      onClick={() => setViewMode('day')}
-      className={`px-2 py-0.5 text-[9px] font-extrabold uppercase rounded-md transition-all ${viewMode === 'day' ? 'bg-green-600 text-white shadow-xs' : 'bg-gray-200 dark:bg-slate-800 text-gray-500 dark:text-slate-400 hover:text-gray-800'}`}
-    >
-      День
-    </button>
-    <button
-      onClick={() => {
-        setViewMode('month');
-        setShowCalendar(!showCalendar);
-      }}
-      className={`px-2 py-0.5 text-[9px] font-extrabold uppercase rounded-md transition-all ${viewMode === 'month' ? 'bg-green-600 text-white shadow-xs' : 'bg-gray-200 dark:bg-slate-800 text-gray-500 dark:text-slate-400 hover:text-gray-800'}`}
-    >
-      Месяц {showCalendar ? '▲' : '▼'}
-    </button>
-  </div>
-</div>
-{/* Выпадающий календарь */}
-{showCalendar && viewMode === 'month' && (
-  <div className="mb-4 p-4 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 shadow-lg">
-    <div className="flex justify-between items-center mb-3">
-      <span className="text-xs font-bold text-gray-700 dark:text-slate-300">
-        📅 Выберите дату для просмотра смен
-      </span>
-      <button
-        onClick={() => setShowCalendar(false)}
-        className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-sm"
-      >
-        ✕
-      </button>
-    </div>
-    <Calendar
-      onChange={(value) => {
-        if (value instanceof Date) {
-          setSelectedDate(value);
-          // Автоматически закрываем календарь после выбора
-          setTimeout(() => setShowCalendar(false), 300);
-        }
-      }}
-      value={selectedDate}
-      locale="ru-RU"
-      className="w-full border-0 shadow-none"
-    />
-    <div className="mt-2 text-[10px] text-gray-400 dark:text-slate-500 text-center">
-      Выберите дату для просмотра смен
-    </div>
-  </div>
-)}
+                    <h5 className="text-[11px] font-black text-gray-900 dark:text-slate-100 uppercase tracking-wider flex items-center space-x-1.5">
+                      <CalendarIcon className="w-4 h-4 text-green-600" />
+                      <span>График рабочих смен персонала</span>
+                    </h5>
+                    
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => setViewMode('day')}
+                        className={`px-2 py-0.5 text-[9px] font-extrabold uppercase rounded-md transition-all ${viewMode === 'day' ? 'bg-green-600 text-white shadow-xs' : 'bg-gray-200 dark:bg-slate-800 text-gray-500 dark:text-slate-400 hover:text-gray-800'}`}
+                      >
+                        День
+                      </button>
+                      <button
+                        onClick={() => {
+                          setViewMode('month');
+                          setShowCalendar(!showCalendar);
+                        }}
+                        className={`px-2 py-0.5 text-[9px] font-extrabold uppercase rounded-md transition-all ${viewMode === 'month' ? 'bg-green-600 text-white shadow-xs' : 'bg-gray-200 dark:bg-slate-800 text-gray-500 dark:text-slate-400 hover:text-gray-800'}`}
+                      >
+                        Месяц {showCalendar ? '▲' : '▼'}
+                      </button>
+                    </div>
+                  </div>
 
                   <p className="text-[10px] text-gray-500 dark:text-slate-400 font-medium mb-3 leading-relaxed">
                     Планирование выходов сотрудников розницы (5 человек, 2 рабочие смены). Изменения пишутся в СУБД-таблицу <span className="font-mono text-emerald-600 dark:text-emerald-400">employee_schedules</span>.
                   </p>
 
+                  {/* Выпадающий календарь */}
+                  {showCalendar && viewMode === 'month' && (
+                    <div className="mb-4 p-4 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 shadow-lg">
+                      <div className="flex justify-between items-center mb-3">
+                        <span className="text-xs font-bold text-gray-700 dark:text-slate-300">
+                          📅 Выберите дату для просмотра смен
+                        </span>
+                        <button
+                          onClick={() => setShowCalendar(false)}
+                          className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-sm"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                      <Calendar
+                        onChange={(value) => {
+                          if (value instanceof Date) {
+                            setSelectedDate(value);
+                            setTimeout(() => setShowCalendar(false), 300);
+                          }
+                        }}
+                        value={selectedDate}
+                        locale="ru-RU"
+                        className="w-full border-0 shadow-none"
+                      />
+                      <div className="mt-2 text-[10px] text-gray-400 dark:text-slate-500 text-center">
+                        Выберите дату для просмотра смен
+                      </div>
+                    </div>
+                  )}
+
                   <div className="space-y-2 mb-4">
-  {dbState.employees.filter(e => e.is_active).map(emp => {
-    let sched;
-    
-    if (viewMode === 'month') {
-      // Для месяца показываем расписание на выбранную дату
-      const dayOfWeek = selectedDate.getDay();
-      const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-      
-      // Ищем расписание на выбранную дату
-      sched = dbState.employee_schedules?.find(s => 
-        s.employee_id === emp.id && 
-        (isWeekend ? s.day_type === 'weekend' : s.day_type === 'weekday')
-      );
-      
-      // Если нет расписания на выходные/будни, показываем сегодня
-      if (!sched) {
-        sched = dbState.employee_schedules?.find(s => 
-          s.employee_id === emp.id && 
-          s.day_type === 'today'
-        );
-      }
-      
-      // Если нет расписания на сегодня, показываем завтра
-      if (!sched) {
-        sched = dbState.employee_schedules?.find(s => 
-          s.employee_id === emp.id && 
-          s.day_type === 'tomorrow'
-        );
-      }
-    } else {
-      sched = dbState.employee_schedules?.find(s => 
-        s.employee_id === emp.id && 
-        s.day_type === selectedScheduleDay
-      );
-    }
-    
-    const currentShift = sched ? sched.shift_name : '—';
-    const currentStatus = sched ? sched.status : 'Выходной';
+                    {dbState.employees.filter(e => e.is_active).map(emp => {
+                      // Ищем расписание для этого сотрудника на выбранную дату
+                      const sched = schedules.find(s => s.employee_id === emp.id);
+                      
+                      const currentShift = sched ? sched.shift_name : '—';
+                      const currentStatus = sched ? sched.status : 'Выходной';
 
-    return (
-      <div key={emp.id} className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 p-2.5 rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-xs">
-        <div>
-          <span className="font-extrabold text-gray-900 dark:text-slate-100 block">{emp.name}</span>
-          <span className="text-[9px] text-gray-400 font-bold block">{dbState.roles.find(r => r.id === emp.role_id)?.name}</span>
-          {viewMode === 'month' && (
-            <span className="text-[8px] text-gray-400 dark:text-slate-500 block mt-0.5">
-              {selectedDate.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}
-            </span>
-          )}
-        </div>
+                      return (
+                        <div key={emp.id} className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 p-2.5 rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-xs">
+                          <div>
+                            <span className="font-extrabold text-gray-900 dark:text-slate-100 block">{emp.name}</span>
+                            <span className="text-[9px] text-gray-400 font-bold block">{dbState.roles.find(r => r.id === emp.role_id)?.name}</span>
+                            {viewMode === 'month' && (
+                              <span className="text-[8px] text-gray-400 dark:text-slate-500 block mt-0.5">
+                                {selectedDate.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}
+                              </span>
+                            )}
+                          </div>
 
-        <div className="flex items-center space-x-2 w-full sm:w-auto justify-between sm:justify-end">
-          <span className={`px-1.5 py-0.5 text-[9px] font-black uppercase rounded ${
-            currentStatus === 'Выходной' 
-              ? 'bg-gray-100 text-gray-500 dark:bg-slate-800 dark:text-slate-400' 
-              : currentShift.includes('Дневная') 
-                ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400'
-                : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400'
-          }`}>
-            {currentStatus === 'Выходной' ? 'Выходной' : currentShift.split(' ')[0]}
-          </span>
+                          <div className="flex items-center space-x-2 w-full sm:w-auto justify-between sm:justify-end">
+                            <span className={`px-1.5 py-0.5 text-[9px] font-black uppercase rounded ${
+                              currentStatus === 'Выходной' 
+                                ? 'bg-gray-100 text-gray-500 dark:bg-slate-800 dark:text-slate-400' 
+                                : currentShift.includes('Дневная') 
+                                  ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400'
+                                  : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400'
+                            }`}>
+                              {currentStatus === 'Выходной' ? 'Выходной' : currentShift.split(' ')[0]}
+                            </span>
 
-          <select
-            value={currentStatus === 'Выходной' ? 'off' : currentShift}
-            onChange={(e) => {
-              const val = e.target.value;
-              if (val === 'off') {
-                handleUpdateSchedule(emp.id, '—', 'Выходной');
-              } else if (val.includes('Дневная')) {
-                handleUpdateSchedule(emp.id, 'Дневная смена (08:00 - 15:30)', 'Работает');
-              } else {
-                handleUpdateSchedule(emp.id, 'Вечерняя смена (15:30 - 23:00)', 'Работает');
-              }
-            }}
-            className="bg-gray-50 dark:bg-slate-800 border border-gray-150 dark:border-slate-750 rounded px-1.5 py-0.5 text-[10px] font-bold text-gray-700 dark:text-slate-300 focus:outline-none"
-          >
-            <option value="off">Выходной</option>
-            <option value="Дневная смена (08:00 - 15:30)">Дневная смена</option>
-            <option value="Вечерняя смена (15:30 - 23:00)">Вечерняя смена</option>
-          </select>
-        </div>
-      </div>
-    );
-  })}
-</div>
+                            <select
+                              value={currentStatus === 'Выходной' ? 'off' : currentShift}
+                              onChange={async (e) => {
+                                const val = e.target.value;
+                                let shiftName = '—';
+                                let status = 'Выходной';
+                                let dayType = 'weekday';
+                                
+                                if (val === 'off') {
+                                  shiftName = '—';
+                                  status = 'Выходной';
+                                } else if (val.includes('Дневная')) {
+                                  shiftName = 'Дневная смена (08:00 - 15:30)';
+                                  status = 'Работает';
+                                  dayType = 'weekday';
+                                } else {
+                                  shiftName = 'Вечерняя смена (15:30 - 23:00)';
+                                  status = 'Работает';
+                                  dayType = 'weekday';
+                                }
+                                
+                                // Сохраняем в Supabase
+                                const result = await updateScheduleForDate(
+                                  emp.id,
+                                  selectedDate,
+                                  shiftName,
+                                  status,
+                                  dayType
+                                );
+                                
+                                if (result) {
+                                  // Обновляем локальное состояние
+                                  await loadSchedules(selectedDate);
+                                  await triggerUpdate();
+                                  console.log('✅ Расписание обновлено');
+                                }
+                              }}
+                              className="bg-gray-50 dark:bg-slate-800 border border-gray-150 dark:border-slate-750 rounded px-1.5 py-0.5 text-[10px] font-bold text-gray-700 dark:text-slate-300 focus:outline-none"
+                            >
+                              <option value="off">Выходной</option>
+                              <option value="Дневная смена (08:00 - 15:30)">Дневная смена</option>
+                              <option value="Вечерняя смена (15:30 - 23:00)">Вечерняя смена</option>
+                            </select>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 <form onSubmit={handleHireEmployee} className="space-y-2 bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 p-2.5 rounded-lg">
@@ -1208,5 +1235,3 @@ function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspaceProps) {
     </div>
   );
 }
-
-export default RoleWorkspace;
