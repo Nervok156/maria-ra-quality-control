@@ -580,7 +580,7 @@ function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspaceProps) {
   </div>
 </div>
 {viewMode === 'month' && (
-  <div className="mb-4">
+  <div className="mb-4 react-calendar-wrapper">
     <Calendar
       onChange={(value) => {
         if (value instanceof Date) {
@@ -589,14 +589,6 @@ function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspaceProps) {
       }}
       value={selectedDate}
       locale="ru-RU"
-      className="w-full border-0 shadow-none text-xs bg-transparent"
-      tileClassName={({ date, view }) => {
-        if (view === 'month') {
-          // Подсветка дней с событиями (можно добавить позже)
-          return '';
-        }
-        return '';
-      }}
     />
     <div className="mt-2 text-[10px] text-gray-400 dark:text-slate-500 text-center">
       Выберите дату для просмотра смен

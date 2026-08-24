@@ -1,50 +1,168 @@
 @import "tailwindcss";
 
 @custom-variant dark (&:where(.dark, .dark *));
-/* Стили для календаря */
+/* ==========================================================
+   Стили для календаря react-calendar
+   ========================================================== */
+
+/* Контейнер календаря */
 .react-calendar {
-  border: none !important;
+  width: 100% !important;
+  max-width: 400px !important;
+  margin: 0 auto !important;
+  background: white !important;
+  border: 1px solid #e5e7eb !important;
   border-radius: 12px !important;
-  padding: 8px !important;
-  background: transparent !important;
+  padding: 16px !important;
   font-family: inherit !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05) !important;
 }
 
-.react-calendar__tile {
-  padding: 8px 4px !important;
-  font-size: 12px !important;
-  border-radius: 8px !important;
+/* Темная тема */
+.dark .react-calendar {
+  background: #1e293b !important;
+  border-color: #334155 !important;
 }
 
-.react-calendar__tile--active {
-  background: #22c55e !important;
-  color: white !important;
-}
-
-.react-calendar__tile--now {
-  background: #f0fdf4 !important;
-}
-
-.dark .react-calendar__tile--now {
-  background: #052e16 !important;
+/* Навигация (месяц/год) */
+.react-calendar__navigation {
+  margin-bottom: 12px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
 }
 
 .react-calendar__navigation button {
-  font-size: 14px !important;
+  min-width: 36px !important;
+  padding: 6px 12px !important;
+  font-size: 13px !important;
   font-weight: 700 !important;
   color: #166534 !important;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 6px !important;
+  cursor: pointer !important;
+  transition: all 0.15s !important;
 }
 
 .dark .react-calendar__navigation button {
   color: #4ade80 !important;
 }
 
+.react-calendar__navigation button:hover {
+  background: #f0fdf4 !important;
+}
+
+.dark .react-calendar__navigation button:hover {
+  background: #052e16 !important;
+}
+
+.react-calendar__navigation button:disabled {
+  opacity: 0.4 !important;
+  cursor: not-allowed !important;
+}
+
+/* Дни недели */
 .react-calendar__month-view__weekdays {
+  text-align: center !important;
+  text-transform: uppercase !important;
   font-size: 10px !important;
   font-weight: 700 !important;
   color: #6b7280 !important;
+  padding: 4px 0 !important;
 }
 
 .dark .react-calendar__month-view__weekdays {
   color: #94a3b8 !important;
+}
+
+.react-calendar__month-view__weekdays__weekday {
+  padding: 6px 0 !important;
+}
+
+.react-calendar__month-view__weekdays abbr {
+  text-decoration: none !important;
+  cursor: default !important;
+}
+
+/* Ячейки дней */
+.react-calendar__tile {
+  aspect-ratio: 1 !important;
+  max-width: 40px !important;
+  padding: 8px 4px !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: #1f2937 !important;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 8px !important;
+  cursor: pointer !important;
+  transition: all 0.15s !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.dark .react-calendar__tile {
+  color: #e2e8f0 !important;
+}
+
+.react-calendar__tile:hover {
+  background: #f3f4f6 !important;
+}
+
+.dark .react-calendar__tile:hover {
+  background: #334155 !important;
+}
+
+/* Текущий день */
+.react-calendar__tile--now {
+  background: #f0fdf4 !important;
+  font-weight: 700 !important;
+}
+
+.dark .react-calendar__tile--now {
+  background: #052e16 !important;
+}
+
+/* Выбранный день */
+.react-calendar__tile--active {
+  background: #22c55e !important;
+  color: white !important;
+  font-weight: 700 !important;
+}
+
+.react-calendar__tile--active:hover {
+  background: #16a34a !important;
+  color: white !important;
+}
+
+/* Соседние месяцы */
+.react-calendar__month-view__days__day--neighboringMonth {
+  color: #9ca3af !important;
+}
+
+.dark .react-calendar__month-view__days__day--neighboringMonth {
+  color: #64748b !important;
+}
+
+/* Выходные дни */
+.react-calendar__month-view__days__day--weekend {
+  color: #ef4444 !important;
+}
+
+.dark .react-calendar__month-view__days__day--weekend {
+  color: #f87171 !important;
+}
+
+/* Отключенные дни */
+.react-calendar__tile:disabled {
+  opacity: 0.3 !important;
+  cursor: not-allowed !important;
+}
+
+/* Центрирование календаря в блоке */
+.react-calendar-wrapper {
+  display: flex;
+  justify-content: center;
 }
