@@ -1,3 +1,49 @@
 @import "tailwindcss";
 
-@custom-variant dark (&:where(.dark, .dark *));
+/* Стили для календаря */
+.react-calendar {
+  border: none !important;
+  border-radius: 12px !important;
+  padding: 8px !important;
+  background: transparent !important;
+  font-family: inherit !important;
+}
+
+.react-calendar__tile {
+  padding: 8px 4px !important;
+  font-size: 12px !important;
+  border-radius: 8px !important;
+}
+
+.react-calendar__tile--active {
+  background: #22c55e !important;
+  color: white !important;
+}
+
+.react-calendar__tile--now {
+  background: #f0fdf4 !important;
+}
+
+.dark .react-calendar__tile--now {
+  background: #052e16 !important;
+}
+
+.react-calendar__navigation button {
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  color: #166534 !important;
+}
+
+.dark .react-calendar__navigation button {
+  color: #4ade80 !important;
+}
+
+.react-calendar__month-view__weekdays {
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  color: #6b7280 !important;
+}
+
+.dark .react-calendar__month-view__weekdays {
+  color: #94a3b8 !important;
+}
