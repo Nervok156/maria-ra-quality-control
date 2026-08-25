@@ -1,6 +1,6 @@
-import * as bcrypt from 'bcryptjs';
 import { supabase } from '../lib/supabaseClient';
 import { Product, ProductCategory } from '../types';
+import * as bcrypt from 'bcryptjs';
 
 // ==========================================================
 // 1. РАБОТА С КАТЕГОРИЯМИ
@@ -542,7 +542,9 @@ export async function getActiveProducts() {
       const markdown = markdowns.find((m: any) => m.batch_id === batch.id);
       
       const today = new Date();
+      today.setHours(0, 0, 0, 0);
       const expiry = new Date(batch.expiration_date);
+      expiry.setHours(0, 0, 0, 0);
       const diffDays = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
       
       let status: 'fresh' | 'expired' | 'expiring_soon' | 'marked_down' | 'written_off' = 'fresh';
@@ -649,9 +651,8 @@ export async function recordSaleInSupabase(productId: string, quantity: number, 
 }
 
 // ==========================================================
-// 21. РАБОТА С РАСПИСАНИЕМ СОТРУДНИКОВ (ПО ДАТАМ) - НОВАЯ ВЕРСИЯ
+// 21. РАБОТА С РАСПИСАНИЕМ СОТРУДНИКОВ (ПО ДАТАМ)
 // ==========================================================
-
 export async function getSchedulesByDate(date: Date) {
   const dateStr = date.toISOString().split('T')[0];
   const { data, error } = await supabase
@@ -695,7 +696,6 @@ export async function updateScheduleForDate(
 ) {
   const dateStr = date.toISOString().split('T')[0];
   
-  // Проверяем, есть ли уже запись
   const { data: existing, error: findError } = await supabase
     .from('employee_schedules')
     .select('id')
@@ -709,7 +709,6 @@ export async function updateScheduleForDate(
   }
   
   if (existing) {
-    // Обновляем существующую запись
     const { data, error } = await supabase
       .from('employee_schedules')
       .update({
@@ -726,11 +725,10 @@ export async function updateScheduleForDate(
     }
     return data?.[0];
   } else {
-    // ✅ СОЗДАЁМ НОВУЮ ЗАПИСЬ С ГЕНЕРАЦИЕЙ ID
     const { data, error } = await supabase
       .from('employee_schedules')
       .insert([{
-        id: `sched_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`, // ✅ Генерируем ID
+        id: `sched_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
         employee_id: employeeId,
         schedule_date: dateStr,
         shift_name: shiftName,
@@ -745,4 +743,52 @@ export async function updateScheduleForDate(
     }
     return data?.[0];
   }
+}
+
+// ==========================================================
+// 22. ХЕШИРОВАНИЕ ПАРОЛЕЙ (НОВЫЕ ФУНКЦИИ)
+// ==========================================================
+
+// Создание хеша пароля
+export async function hashPassword(password: string): Promise<string> {
+  const saltRounds = 10;
+  return await bcrypt.hash(password, saltRounds);
+}
+
+// Проверка пароля
+export async function verifyPassword(password: string, hash: string): Promise<boolean> {
+  if (!hash) return false;
+  return await bcrypt.compare(password, hash);
+}
+
+// Получение сотрудника с хешем пароля
+export async function getEmployeeWithPasswordHash(username: string) {
+  // Ищем по табельному номеру
+  const { data, error } = await supabase
+    .from('employees')
+    .select('*')
+    .eq('personnel_number', username)
+    .maybeSingle();
+  
+  if (error) {
+    console.error('❌ Ошибка поиска сотрудника:', error);
+    return null;
+  }
+  
+  // Если не найден по табельному, ищем по имени (username)
+  if (!data) {
+    const { data: byName, error: nameError } = await supabase
+      .from('employees')
+      .select('*')
+      .eq('username', username)
+      .maybeSingle();
+    
+    if (nameError) {
+      console.error('❌ Ошибка поиска сотрудника по имени:', nameError);
+      return null;
+    }
+    return byName;
+  }
+  
+  return data;
 }

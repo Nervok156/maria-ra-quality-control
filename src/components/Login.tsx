@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Sun, ShieldAlert, KeyRound, User, Eye, EyeOff, LogIn } from 'lucide-react';
-import { getDBState } from '../data/databaseState';
 import { Employee } from '../types';
+import { getEmployeeWithPasswordHash, verifyPassword } from '../api/databaseAPI';
 
 interface LoginProps {
   onLogin: (employee: Employee) => void;
@@ -13,6 +13,7 @@ export default function Login({ onLogin }: LoginProps) {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   // ==========================================================
   // ЗАЩИТА ОТ БРУТФОРСА
@@ -131,123 +132,113 @@ export default function Login({ onLogin }: LoginProps) {
     '5': 'bg-teal-500'
   };
 
-  const getSystemEmployees = () => {
-    const dbState = getDBState();
-    return dbState.employees.map((emp: any) => {
-      let defaultUser = '';
-      if (emp.id === '1') defaultUser = 'kopyl';
-      else if (emp.id === '2') defaultUser = 'ivanova';
-      else if (emp.id === '3') defaultUser = 'fedorova';
-      else if (emp.id === '4') defaultUser = 'vasiliev';
-      else if (emp.id === '5') defaultUser = 'smirnov';
-      else {
-        defaultUser = emp.name.toLowerCase().split(' ')[0] || 'employee';
-      }
-
-      return {
-        ...emp,
-        username: defaultUser,
-        password: '123'
-      };
-    });
-  };
-
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  // ==========================================================
+  // ОБРАБОТЧИК ВХОДА
+  // ==========================================================
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setIsLoading(true);
 
     // Проверка блокировки
     if (isBlocked) {
       setError(`⚠️ Аккаунт заблокирован. Попробуйте через ${Math.ceil(timeLeft / 60)} минут ${timeLeft % 60} секунд.`);
+      setIsLoading(false);
       return;
     }
 
-    // ✅ Очистка ввода
+    // Очистка ввода
     const sanitizedUsername = sanitizeInput(username);
     const sanitizedPassword = sanitizeInput(password);
 
-    // ✅ Проверка на пустые поля
+    // Проверка на пустые поля
     if (!sanitizedUsername || !sanitizedPassword) {
       setError('Пожалуйста, заполните все поля!');
+      setIsLoading(false);
       return;
     }
 
-    // ✅ Проверка на HTML-теги
+    // Проверка на HTML-теги
     if (hasHtmlTags(sanitizedUsername) || hasHtmlTags(sanitizedPassword)) {
       setError('Обнаружены недопустимые символы в поле ввода!');
+      setIsLoading(false);
       return;
     }
 
-    // ✅ Проверка на опасный код
+    // Проверка на опасный код
     if (containsDangerousCode(sanitizedUsername) || containsDangerousCode(sanitizedPassword)) {
       setError('Обнаружен потенциально опасный код в поле ввода!');
+      setIsLoading(false);
       return;
     }
 
-    // ✅ Ограничение длины
+    // Ограничение длины
     if (sanitizedUsername.length > 50 || sanitizedPassword.length > 50) {
       setError('Превышена максимальная длина поля!');
+      setIsLoading(false);
       return;
     }
 
-    const systemEmps = getSystemEmployees();
-    
-    const matchedEmp = systemEmps.find((emp: any) => {
-      const isUsernameMatch = emp.username.toLowerCase() === sanitizedUsername.toLowerCase();
-      const isPersNumMatch = emp.personnel_number.toLowerCase() === sanitizedUsername.toLowerCase();
-      return (isUsernameMatch || isPersNumMatch) && emp.is_active;
-    });
+    try {
+      // ✅ Ищем сотрудника в Supabase (через databaseAPI)
+      const employee = await getEmployeeWithPasswordHash(sanitizedUsername);
 
-    if (!matchedEmp) {
-      const newAttempts = loginAttempts + 1;
-      setLoginAttempts(newAttempts);
-      
-      if (newAttempts >= MAX_ATTEMPTS) {
-        const blockUntil = new Date(Date.now() + BLOCK_DURATION);
-        setBlockedUntil(blockUntil);
-        setError(`⚠️ Превышено количество попыток! Доступ заблокирован на 5 минут.`);
-      } else {
-        setError(`Неверный логин или пароль. Осталось попыток: ${MAX_ATTEMPTS - newAttempts}`);
+      if (!employee) {
+        const newAttempts = loginAttempts + 1;
+        setLoginAttempts(newAttempts);
+        
+        if (newAttempts >= MAX_ATTEMPTS) {
+          const blockUntil = new Date(Date.now() + BLOCK_DURATION);
+          setBlockedUntil(blockUntil);
+          setError(`⚠️ Превышено количество попыток! Доступ заблокирован на 5 минут.`);
+        } else {
+          setError(`Неверный логин или пароль. Осталось попыток: ${MAX_ATTEMPTS - newAttempts}`);
+        }
+        setIsLoading(false);
+        return;
       }
-      return;
-    }
 
-    if (matchedEmp.password !== sanitizedPassword) {
-      const newAttempts = loginAttempts + 1;
-      setLoginAttempts(newAttempts);
-      
-      if (newAttempts >= MAX_ATTEMPTS) {
-        const blockUntil = new Date(Date.now() + BLOCK_DURATION);
-        setBlockedUntil(blockUntil);
-        setError(`⚠️ Превышено количество попыток! Доступ заблокирован на 5 минут.`);
-      } else {
-        setError(`Неверный пароль. Осталось попыток: ${MAX_ATTEMPTS - newAttempts}`);
+      // ✅ Проверяем пароль (сравниваем с хешем)
+      const isValidPassword = await verifyPassword(sanitizedPassword, employee.password_hash);
+
+      if (!isValidPassword) {
+        const newAttempts = loginAttempts + 1;
+        setLoginAttempts(newAttempts);
+        
+        if (newAttempts >= MAX_ATTEMPTS) {
+          const blockUntil = new Date(Date.now() + BLOCK_DURATION);
+          setBlockedUntil(blockUntil);
+          setError(`⚠️ Превышено количество попыток! Доступ заблокирован на 5 минут.`);
+        } else {
+          setError(`Неверный пароль. Осталось попыток: ${MAX_ATTEMPTS - newAttempts}`);
+        }
+        setIsLoading(false);
+        return;
       }
-      return;
+
+      // ✅ Успешный вход — сбрасываем счётчик
+      setLoginAttempts(0);
+      localStorage.removeItem('maria_ra_blocked_until');
+
+      const uiEmp: Employee = {
+        id: employee.id,
+        name: employee.name,
+        role: roleMap[employee.role_id] || 'Товаровед-кассир',
+        avatarColor: avatarColors[employee.id] || 'bg-green-600'
+      };
+
+      onLogin(uiEmp);
+    } catch (error) {
+      console.error('❌ Ошибка при входе:', error);
+      setError('Произошла ошибка при входе. Попробуйте позже.');
+    } finally {
+      setIsLoading(false);
     }
-
-    // ✅ Успешный вход — сбрасываем счётчик
-    setLoginAttempts(0);
-    localStorage.removeItem('maria_ra_blocked_until');
-
-    const uiEmp: Employee = {
-      id: matchedEmp.id,
-      name: matchedEmp.name,
-      role: roleMap[matchedEmp.role_id] || 'Товаровед-кассир',
-      avatarColor: avatarColors[matchedEmp.id] || 'bg-green-600'
-    };
-
-    onLogin(uiEmp);
   };
 
-  const handleQuickFill = (emp: any) => {
-    setUsername(emp.personnel_number);
-    setPassword(emp.password);
-    setError('');
-  };
-
-  const employeesList = getSystemEmployees();
-
+  // ==========================================================
+  // JSX
+  // ==========================================================
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-slate-950 p-4 transition-colors duration-200">
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(16,185,129,0.08),rgba(255,255,255,0))] pointer-events-none"></div>
@@ -348,7 +339,7 @@ export default function Login({ onLogin }: LoginProps) {
                     placeholder="Например, T-0421 или kopyl"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    disabled={isBlocked}
+                    disabled={isBlocked || isLoading}
                     className="w-full pl-9 pr-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-xs font-bold text-gray-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-green-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     maxLength={50}
                   />
@@ -369,7 +360,7 @@ export default function Login({ onLogin }: LoginProps) {
                     placeholder="Пароль администратора"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    disabled={isBlocked}
+                    disabled={isBlocked || isLoading}
                     className="w-full pl-9 pr-10 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-xs font-bold text-gray-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-green-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     maxLength={50}
                   />
@@ -386,11 +377,20 @@ export default function Login({ onLogin }: LoginProps) {
               {/* Кнопка входа */}
               <button
                 type="submit"
-                disabled={isBlocked}
+                disabled={isBlocked || isLoading}
                 className="w-full py-2.5 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 dark:disabled:bg-slate-700 text-white font-black uppercase text-xs tracking-wider rounded-xl cursor-pointer transition-all active:scale-98 shadow-sm flex items-center justify-center space-x-2 disabled:cursor-not-allowed"
               >
-                <LogIn className="w-4 h-4" />
-                <span>{isBlocked ? 'ДОСТУП ЗАБЛОКИРОВАН' : 'Войти в систему'}</span>
+                {isLoading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <span>ПРОВЕРКА...</span>
+                  </>
+                ) : (
+                  <>
+                    <LogIn className="w-4 h-4" />
+                    <span>{isBlocked ? 'ДОСТУП ЗАБЛОКИРОВАН' : 'Войти в систему'}</span>
+                  </>
+                )}
               </button>
             </form>
           </motion.div>
@@ -410,12 +410,22 @@ export default function Login({ onLogin }: LoginProps) {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {employeesList.filter(emp => emp.is_active).map(emp => (
+              {[
+                { id: '1', name: 'Копыл И.А.', role: 'Товаровед-кассир', login: 'T-0421' },
+                { id: '2', name: 'Иванова А.С.', role: 'Директор магазина', login: 'D-0012' },
+                { id: '3', name: 'Федорова М.В.', role: 'Старший бухгалтер', login: 'B-0089' },
+                { id: '4', name: 'Васильев П.С.', role: 'Старший товаровед', login: 'M-0145' },
+                { id: '5', name: 'Смирнов А.В.', role: 'Товаровед-кассир', login: 'C-0842' },
+              ].map(emp => (
                 <button
                   key={emp.id}
-                  onClick={() => handleQuickFill(emp)}
+                  onClick={() => {
+                    setUsername(emp.login);
+                    setPassword('123');
+                    setError('');
+                  }}
                   type="button"
-                  disabled={isBlocked}
+                  disabled={isBlocked || isLoading}
                   className="p-2.5 bg-white dark:bg-slate-900 border border-gray-150 dark:border-slate-850 hover:border-green-500/50 dark:hover:border-green-500/50 rounded-xl flex items-center justify-between text-left transition-all hover:shadow-2xs group cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <div className="truncate pr-2">
@@ -423,10 +433,10 @@ export default function Login({ onLogin }: LoginProps) {
                       {emp.name}
                     </span>
                     <span className="text-[9px] text-gray-400 dark:text-slate-500 block leading-tight">
-                      {roleMap[emp.role_id] || 'Кассир'}
+                      {emp.role}
                     </span>
                     <span className="text-[9px] font-mono font-bold text-green-700 dark:text-green-500 block mt-0.5">
-                      Логин: {emp.personnel_number}
+                      Логин: {emp.login}
                     </span>
                   </div>
                   <span className="text-[10px] font-black uppercase text-gray-400 group-hover:text-green-600 transition-colors shrink-0">
