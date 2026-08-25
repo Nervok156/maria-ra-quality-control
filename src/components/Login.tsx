@@ -31,7 +31,7 @@ export default function Login({ onLogin }: LoginProps) {
   const [isBlocked, setIsBlocked] = useState(false);
 
   const MAX_ATTEMPTS = 5;
-  const BLOCK_DURATION = 5 * 60 * 1000;
+  const BLOCK_DURATION = 5 * 60 * 1000; // 5 минут
 
   useEffect(() => {
     localStorage.setItem('maria_ra_login_attempts', String(loginAttempts));
@@ -81,6 +81,38 @@ export default function Login({ onLogin }: LoginProps) {
   }, [blockedUntil]);
 
   // ==========================================================
+  // ЗАЩИТА ОТ XSS И SQL-ИНЪЕКЦИЙ
+  // ==========================================================
+  const sanitizeInput = (input: string) => {
+    return input.replace(/[<>]/g, '').trim();
+  };
+
+  const hasHtmlTags = (str: string) => {
+    return /<[^>]*>/.test(str);
+  };
+
+  const containsDangerousCode = (str: string) => {
+    const dangerousPatterns = [
+      /eval\s*\(/i,
+      /new\s+Function/i,
+      /document\.write/i,
+      /innerHTML/i,
+      /outerHTML/i,
+      /localStorage\.setItem/i,
+      /sessionStorage\.setItem/i,
+      /fetch\s*\(/i,
+      /XMLHttpRequest/i,
+      /alert\s*\(/i,
+      /confirm\s*\(/i,
+      /prompt\s*\(/i,
+      /console\.log/i,
+      /window\.location/i,
+      /document\.cookie/i
+    ];
+    return dangerousPatterns.some(pattern => pattern.test(str));
+  };
+
+  // ==========================================================
   // ОСТАЛЬНЫЕ ФУНКЦИИ
   // ==========================================================
 
@@ -124,21 +156,45 @@ export default function Login({ onLogin }: LoginProps) {
     e.preventDefault();
     setError('');
 
+    // Проверка блокировки
     if (isBlocked) {
       setError(`⚠️ Аккаунт заблокирован. Попробуйте через ${Math.ceil(timeLeft / 60)} минут ${timeLeft % 60} секунд.`);
       return;
     }
 
-    if (!username.trim() || !password.trim()) {
+    // ✅ Очистка ввода
+    const sanitizedUsername = sanitizeInput(username);
+    const sanitizedPassword = sanitizeInput(password);
+
+    // ✅ Проверка на пустые поля
+    if (!sanitizedUsername || !sanitizedPassword) {
       setError('Пожалуйста, заполните все поля!');
+      return;
+    }
+
+    // ✅ Проверка на HTML-теги
+    if (hasHtmlTags(sanitizedUsername) || hasHtmlTags(sanitizedPassword)) {
+      setError('Обнаружены недопустимые символы в поле ввода!');
+      return;
+    }
+
+    // ✅ Проверка на опасный код
+    if (containsDangerousCode(sanitizedUsername) || containsDangerousCode(sanitizedPassword)) {
+      setError('Обнаружен потенциально опасный код в поле ввода!');
+      return;
+    }
+
+    // ✅ Ограничение длины
+    if (sanitizedUsername.length > 50 || sanitizedPassword.length > 50) {
+      setError('Превышена максимальная длина поля!');
       return;
     }
 
     const systemEmps = getSystemEmployees();
     
     const matchedEmp = systemEmps.find((emp: any) => {
-      const isUsernameMatch = emp.username.toLowerCase() === username.trim().toLowerCase();
-      const isPersNumMatch = emp.personnel_number.toLowerCase() === username.trim().toLowerCase();
+      const isUsernameMatch = emp.username.toLowerCase() === sanitizedUsername.toLowerCase();
+      const isPersNumMatch = emp.personnel_number.toLowerCase() === sanitizedUsername.toLowerCase();
       return (isUsernameMatch || isPersNumMatch) && emp.is_active;
     });
 
@@ -156,7 +212,7 @@ export default function Login({ onLogin }: LoginProps) {
       return;
     }
 
-    if (matchedEmp.password !== password) {
+    if (matchedEmp.password !== sanitizedPassword) {
       const newAttempts = loginAttempts + 1;
       setLoginAttempts(newAttempts);
       
@@ -170,6 +226,7 @@ export default function Login({ onLogin }: LoginProps) {
       return;
     }
 
+    // ✅ Успешный вход — сбрасываем счётчик
     setLoginAttempts(0);
     localStorage.removeItem('maria_ra_blocked_until');
 
@@ -197,6 +254,7 @@ export default function Login({ onLogin }: LoginProps) {
       
       <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-12 gap-8 items-center relative z-10">
         
+        {/* Левая колонка: Бренд */}
         <div className="md:col-span-5 text-center md:text-left space-y-6">
           <div className="flex flex-col items-center md:items-start space-y-3">
             <div className="relative flex items-center justify-center w-16 h-16 rounded-full bg-amber-400 text-white shadow-lg border-2 border-yellow-300">
@@ -232,6 +290,7 @@ export default function Login({ onLogin }: LoginProps) {
           </div>
         </div>
 
+        {/* Правая колонка: Форма входа */}
         <div className="md:col-span-7 space-y-6">
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
@@ -243,6 +302,7 @@ export default function Login({ onLogin }: LoginProps) {
               Авторизация сотрудника
             </h2>
 
+            {/* Сообщение об ошибке */}
             {error && (
               <div className={`mb-4 p-3 rounded-xl text-xs font-bold flex items-start space-x-2 animate-fade-in ${
                 isBlocked || error.includes('блокирован') || error.includes('превышено')
@@ -254,12 +314,14 @@ export default function Login({ onLogin }: LoginProps) {
               </div>
             )}
 
+            {/* Индикатор оставшихся попыток */}
             {!isBlocked && loginAttempts > 0 && loginAttempts < MAX_ATTEMPTS && (
               <div className="mb-4 text-xs text-amber-600 dark:text-amber-400 font-bold">
                 ⚠️ Осталось попыток: {MAX_ATTEMPTS - loginAttempts}
               </div>
             )}
 
+            {/* Блокировка */}
             {isBlocked && (
               <div className="mb-4 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30 rounded-xl p-4 text-center">
                 <p className="text-sm text-red-700 dark:text-red-400 font-bold">
@@ -272,6 +334,7 @@ export default function Login({ onLogin }: LoginProps) {
             )}
 
             <form onSubmit={handleLoginSubmit} className="space-y-4">
+              {/* Поле: Логин */}
               <div>
                 <label className="text-[10px] font-black text-gray-400 uppercase block mb-1">
                   Табельный номер или логин:
@@ -287,10 +350,12 @@ export default function Login({ onLogin }: LoginProps) {
                     onChange={(e) => setUsername(e.target.value)}
                     disabled={isBlocked}
                     className="w-full pl-9 pr-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-xs font-bold text-gray-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-green-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    maxLength={50}
                   />
                 </div>
               </div>
 
+              {/* Поле: Пароль */}
               <div>
                 <label className="text-[10px] font-black text-gray-400 uppercase block mb-1">
                   Пароль доступа:
@@ -306,6 +371,7 @@ export default function Login({ onLogin }: LoginProps) {
                     onChange={(e) => setPassword(e.target.value)}
                     disabled={isBlocked}
                     className="w-full pl-9 pr-10 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-xs font-bold text-gray-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-green-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    maxLength={50}
                   />
                   <button
                     type="button"
@@ -317,6 +383,7 @@ export default function Login({ onLogin }: LoginProps) {
                 </div>
               </div>
 
+              {/* Кнопка входа */}
               <button
                 type="submit"
                 disabled={isBlocked}
@@ -328,6 +395,7 @@ export default function Login({ onLogin }: LoginProps) {
             </form>
           </motion.div>
 
+          {/* Ассистент быстрого входа */}
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
