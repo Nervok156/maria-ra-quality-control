@@ -248,32 +248,32 @@ export default function CashierWorkspace({ currentUser, onDataChange }: CashierW
     const date = new Date(receipt.created_at).toLocaleString('ru-RU');
     
     let text = `
-========================================
+==================================================
     ТС «Мария-Ра» - Филиал №142
     г. Барнаул, пр. Ленина, 54
-========================================
+==================================================
 ЧЕК №: ${receipt.receipt_number}
 Дата: ${date}
 Кассир: ${currentUser.name}
-----------------------------------------
-Товар                     Кол-во   Цена
-----------------------------------------`;
+--------------------------------------------------
+Товар                           Кол-во   Цена
+--------------------------------------------------`;
 
     items.forEach((item: any) => {
       const productName = item.products?.name || 'Товар';
-      text += `\n${productName.padEnd(25)} ${item.quantity} x ${item.unit_price} = ${item.total_price} ₽`;
+      text += `\n${productName.padEnd(35)} ${item.quantity} x ${item.unit_price} = ${item.total_price} ₽`;
     });
 
     text += `
-----------------------------------------
-ИТОГО:                    ${receipt.total_amount.toFixed(2)} ₽
+--------------------------------------------------
+ИТОГО:                                    ${receipt.total_amount.toFixed(2)} ₽
 Оплата: ${receipt.payment_method === 'cash' ? 'Наличные' : 'Карта'}
 Внесено: ${receipt.paid_amount.toFixed(2)} ₽
 Сдача: ${receipt.change_amount.toFixed(2)} ₽
-========================================
+==================================================
     Спасибо за покупку!
     Товар возврату не подлежит
-========================================
+==================================================
     `;
 
     const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
@@ -287,6 +287,9 @@ export default function CashierWorkspace({ currentUser, onDataChange }: CashierW
     URL.revokeObjectURL(url);
   };
 
+  // ==========================================================
+  // СКАЧИВАНИЕ ОТЧЁТА ЗА СМЕНУ
+  // ==========================================================
   const handleDownloadShiftReport = () => {
     if (!receipts || receipts.length === 0) {
       setError('Нет чеков за сегодня');
@@ -295,27 +298,30 @@ export default function CashierWorkspace({ currentUser, onDataChange }: CashierW
     }
 
     const date = new Date().toLocaleDateString('ru-RU');
+    
+    // Рассчитываем общую выручку
     const totalRevenue = receipts.reduce((sum: number, r: any) => sum + (r.total_amount || 0), 0);
     
+    // Рассчитываем общее количество товаров (штук)
     const totalItems = receipts.reduce((sum: number, r: any) => {
       const items = r.receipt_items || [];
       return sum + items.reduce((itemSum: number, item: any) => itemSum + (item.quantity || 0), 0);
     }, 0);
     
     let text = `
-========================================
+==================================================
     ТС «Мария-Ра» - Филиал №142
     г. Барнаул, пр. Ленина, 54
-========================================
+==================================================
     ОТЧЁТ ЗА СМЕНУ
     Дата: ${date}
     Кассир: ${currentUser.name}
-========================================
+==================================================
     ИТОГИ:
     Всего чеков: ${receipts.length}
     Всего товаров (шт.): ${totalItems}
     Общая выручка: ${totalRevenue.toFixed(2)} ₽
-========================================
+==================================================
     ЧЕКИ ЗА СМЕНУ:
 `;
 
@@ -333,10 +339,10 @@ ${index + 1}. Чек №${receipt.receipt_number}
     });
 
     text += `
-========================================
+==================================================
     КОНЕЦ ОТЧЁТА
     Спасибо за работу!
-========================================
+==================================================
     `;
 
     const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
@@ -451,8 +457,8 @@ ${index + 1}. Чек №${receipt.receipt_number}
                     key={index}
                     className="flex justify-between items-center text-sm py-2 border-b border-gray-50 dark:border-slate-800"
                   >
-                    <span className="text-gray-700 dark:text-slate-300 truncate max-w-[180px]">
-                      {item.product?.name || 'Товар'} x{item.quantity}
+                    <span className="text-gray-700 dark:text-slate-300 text-sm flex-1">
+                      {item.product?.name || 'Товар'} × {item.quantity}
                     </span>
                     <div className="flex items-center space-x-3 shrink-0">
                       <span className="font-bold">{item.totalPrice?.toFixed(2) || '0.00'} ₽</span>
