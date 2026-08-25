@@ -1,3 +1,4 @@
+import * as bcrypt from 'bcryptjs';
 import { supabase } from '../lib/supabaseClient';
 import { Product, ProductCategory } from '../types';
 
