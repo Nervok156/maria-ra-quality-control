@@ -763,6 +763,8 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
 
 // Получение сотрудника с хешем пароля
 export async function getEmployeeWithPasswordHash(username: string) {
+  console.log('🔍 Ищем сотрудника с логином:', username);
+  
   // Ищем по табельному номеру
   const { data, error } = await supabase
     .from('employees')
@@ -775,8 +777,11 @@ export async function getEmployeeWithPasswordHash(username: string) {
     return null;
   }
   
+  console.log('✅ Найден по personnel_number:', data);
+  
   // Если не найден по табельному, ищем по имени (username)
   if (!data) {
+    console.log('🔍 Ищем по username:', username);
     const { data: byName, error: nameError } = await supabase
       .from('employees')
       .select('*')
@@ -787,6 +792,7 @@ export async function getEmployeeWithPasswordHash(username: string) {
       console.error('❌ Ошибка поиска сотрудника по имени:', nameError);
       return null;
     }
+    console.log('✅ Найден по username:', byName);
     return byName;
   }
   
