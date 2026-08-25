@@ -1,0 +1,501 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  Search, Plus, Trash2, ShoppingCart, CreditCard, 
+  Printer, Download, X, CheckCircle, AlertCircle
+} from 'lucide-react';
+import { 
+  searchProductsForSale, 
+  getAvailableBatches, 
+  createReceipt, 
+  createReceiptItems, 
+  getTodayReceipts,
+  getNextReceiptNumber,
+  recordSaleInSupabase,
+  getActiveProducts
+} from '../api/databaseAPI';
+import { Product, Employee } from '../types';
+
+interface CashierWorkspaceProps {
+  currentUser: Employee;
+  onDataChange: () => Promise<void>;
+}
+
+interface CartItem {
+  product: Product;
+  batchId: string;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+}
+
+export default function CashierWorkspace({ currentUser, onDataChange }: CashierWorkspaceProps) {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [searchResults, setSearchResults] = useState<Product[]>([]);
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [receipts, setReceipts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card'>('cash');
+  const [paidAmount, setPaidAmount] = useState<number>(0);
+
+  // Загрузка чеков за сегодня
+  const loadReceipts = async () => {
+    try {
+      const data = await getTodayReceipts(currentUser.id);
+      setReceipts(data);
+    } catch (error) {
+      console.error('❌ Ошибка загрузки чеков:', error);
+    }
+  };
+
+  useEffect(() => {
+    loadReceipts();
+  }, []);
+
+  // Поиск товаров
+  const handleSearch = async () => {
+    if (!searchTerm.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      const results = await searchProductsForSale(searchTerm);
+      setSearchResults(results);
+    } catch (error) {
+      console.error('❌ Ошибка поиска:', error);
+      setError('Ошибка поиска товаров');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Добавление товара в корзину
+  const addToCart = async (product: Product) => {
+    try {
+      // Проверяем остатки
+      const batches = await getAvailableBatches(product.id);
+      if (batches.length === 0) {
+        setError('Нет доступных партий этого товара на полках');
+        setTimeout(() => setError(null), 3000);
+        return;
+      }
+
+      const batch = batches[0]; // Берём первую доступную партию (с ближайшим сроком)
+
+      // Проверяем, есть ли уже такой товар в корзине
+      const existingItem = cart.find(item => item.product.id === product.id && item.batchId === batch.id);
+      
+      if (existingItem) {
+        // Увеличиваем количество
+        if (existingItem.quantity >= batch.quantity) {
+          setError('Недостаточно товара на полке');
+          setTimeout(() => setError(null), 3000);
+          return;
+        }
+        setCart(cart.map(item => 
+          item.product.id === product.id && item.batchId === batch.id
+            ? { ...item, quantity: item.quantity + 1, totalPrice: (item.quantity + 1) * item.unitPrice }
+            : item
+        ));
+      } else {
+        // Добавляем новый товар
+        setCart([...cart, {
+          product,
+          batchId: batch.id,
+          quantity: 1,
+          unitPrice: product.price,
+          totalPrice: product.price
+        }]);
+      }
+      
+      setSuccessMessage('Товар добавлен в чек');
+      setTimeout(() => setSuccessMessage(null), 2000);
+    } catch (error) {
+      console.error('❌ Ошибка добавления товара:', error);
+      setError('Ошибка добавления товара');
+      setTimeout(() => setError(null), 3000);
+    }
+  };
+
+  // Удаление товара из корзины
+  const removeFromCart = (index: number) => {
+    setCart(cart.filter((_, i) => i !== index));
+  };
+
+  // Очистка корзины
+  const clearCart = () => {
+    setCart([]);
+  };
+
+  // Расчёт итоговой суммы
+  const getTotal = () => {
+    return cart.reduce((sum, item) => sum + item.totalPrice, 0);
+  };
+
+  // Оформление оплаты
+  const handlePayment = async () => {
+    if (cart.length === 0) {
+      setError('Корзина пуста');
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
+
+    const total = getTotal();
+    if (paymentMethod === 'cash' && paidAmount < total) {
+      setError('Внесена недостаточная сумма');
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      
+      // Генерируем номер чека
+      const receiptNumber = await getNextReceiptNumber('store_1');
+      
+      // Создаём чек
+      const receipt = await createReceipt({
+        receipt_number: receiptNumber,
+        cashier_id: currentUser.id,
+        store_id: 'store_1',
+        total_amount: total,
+        payment_method: paymentMethod,
+        paid_amount: paymentMethod === 'cash' ? paidAmount : total,
+        change_amount: paymentMethod === 'cash' ? paidAmount - total : 0,
+        is_return: false
+      });
+
+      if (!receipt) {
+        throw new Error('Не удалось создать чек');
+      }
+
+      // Создаём позиции чека и списываем товары
+      const items = [];
+      for (const item of cart) {
+        // Создаём позицию чека
+        items.push({
+          receipt_id: receipt.id,
+          product_id: item.product.id,
+          batch_id: item.batchId,
+          quantity: item.quantity,
+          unit_price: item.unitPrice,
+          total_price: item.totalPrice
+        });
+
+        // Списываем товар через recordSaleInSupabase
+        await recordSaleInSupabase(
+          item.product.id,
+          item.quantity,
+          item.unitPrice,
+          item.batchId
+        );
+      }
+
+      await createReceiptItems(items);
+      
+      // Обновляем список чеков
+      await loadReceipts();
+      await onDataChange();
+      
+      // Очищаем корзину
+      clearCart();
+      setPaidAmount(0);
+      
+      setSuccessMessage(`Чек №${receiptNumber} успешно оформлен!`);
+      setTimeout(() => setSuccessMessage(null), 3000);
+      
+      // Печать чека (опционально)
+      // handlePrintReceipt(receipt, items);
+      
+    } catch (error) {
+      console.error('❌ Ошибка оформления чека:', error);
+      setError('Ошибка оформления чека');
+      setTimeout(() => setError(null), 3000);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Скачать чек (PDF/текст)
+  const handleDownloadReceipt = (receipt: any) => {
+    const items = receipt.receipt_items || [];
+    const text = `
+========================================
+    ТС «Мария-Ра» - Филиал №142
+    г. Барнаул, пр. Ленина, 54
+========================================
+ЧЕК №: ${receipt.receipt_number}
+Дата: ${new Date(receipt.created_at).toLocaleString('ru-RU')}
+Кассир: ${currentUser.name}
+----------------------------------------
+Товар                     Кол-во   Цена
+----------------------------------------
+${items.map((item: any) => {
+  const productName = item.products?.name || 'Товар';
+  return `${productName.padEnd(25)} ${item.quantity} x ${item.unit_price} = ${item.total_price} ₽`;
+}).join('\n')}
+----------------------------------------
+ИТОГО:                    ${receipt.total_amount.toFixed(2)} ₽
+Оплата: ${receipt.payment_method === 'cash' ? 'Наличные' : 'Карта'}
+Внесено: ${receipt.paid_amount.toFixed(2)} ₽
+Сдача: ${receipt.change_amount.toFixed(2)} ₽
+========================================
+    Спасибо за покупку!
+    Товар возврату не подлежит
+========================================
+    `;
+
+    // Создаём и скачиваем файл
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `чек_${receipt.receipt_number}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="space-y-4">
+      <h3 className="text-sm font-black text-gray-900 dark:text-slate-100 uppercase tracking-tight">
+        🧾 Кассовый терминал
+      </h3>
+      
+      {/* Сообщения об ошибках и успехах */}
+      {error && (
+        <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30 rounded-xl p-3 text-xs text-red-700 dark:text-red-400 flex items-center space-x-2">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+      
+      {successMessage && (
+        <div className="bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900/30 rounded-xl p-3 text-xs text-green-700 dark:text-green-400 flex items-center space-x-2">
+          <CheckCircle className="w-4 h-4 shrink-0" />
+          <span>{successMessage}</span>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        
+        {/* Левая колонка: Поиск и корзина */}
+        <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-xl p-4">
+          <h4 className="text-xs font-black text-gray-700 dark:text-slate-300 mb-3">
+            Добавление товара в чек
+          </h4>
+          
+          {/* Поиск товара */}
+          <div className="flex gap-2 mb-3">
+            <input
+              type="text"
+              placeholder="Поиск по названию или штрихкоду..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+              className="flex-1 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-green-500"
+            />
+            <button
+              onClick={handleSearch}
+              disabled={loading}
+              className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-bold transition-colors disabled:opacity-50"
+            >
+              {loading ? '...' : <Search className="w-4 h-4" />}
+            </button>
+          </div>
+          
+          {/* Результаты поиска */}
+          {searchResults.length > 0 && (
+            <div className="space-y-1 max-h-40 overflow-y-auto mb-3">
+              {searchResults.map((product) => (
+                <div
+                  key={product.id}
+                  className="flex justify-between items-center p-2 bg-gray-50 dark:bg-slate-800 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+                >
+                  <div className="flex-1 min-w-0">
+                    <span className="text-xs font-bold text-gray-900 dark:text-slate-100 block truncate">
+                      {product.name}
+                    </span>
+                    <span className="text-[10px] text-gray-400">
+                      {product.price} ₽ | {product.barcode}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => addToCart(product)}
+                    className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-[10px] font-bold transition-colors ml-2 shrink-0"
+                  >
+                    + Добавить
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          
+          {/* Текущий чек (корзина) */}
+          <div className="border-t border-gray-100 dark:border-slate-800 pt-3">
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-xs font-black text-gray-700 dark:text-slate-300">
+                Текущий чек
+              </span>
+              <span className="text-xs text-gray-400">
+                {cart.length} позиций
+              </span>
+            </div>
+            
+            <div className="space-y-1 max-h-40 overflow-y-auto">
+              {cart.length === 0 ? (
+                <div className="text-center py-4 text-gray-400 text-xs">
+                  Корзина пуста. Добавьте товары через поиск.
+                </div>
+              ) : (
+                cart.map((item, index) => (
+                  <div
+                    key={index}
+                    className="flex justify-between items-center text-xs py-1 border-b border-gray-50 dark:border-slate-800"
+                  >
+                    <span className="text-gray-700 dark:text-slate-300 truncate">
+                      {item.product.name} x{item.quantity}
+                    </span>
+                    <div className="flex items-center space-x-2 shrink-0">
+                      <span className="font-bold">{item.totalPrice.toFixed(2)} ₽</span>
+                      <button
+                        onClick={() => removeFromCart(index)}
+                        className="text-red-500 hover:text-red-700 transition-colors"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+            
+            <div className="flex justify-between items-center mt-2 pt-2 border-t border-gray-200 dark:border-slate-700">
+              <span className="text-sm font-black text-gray-900 dark:text-slate-100">ИТОГО:</span>
+              <span className="text-sm font-black text-green-600 dark:text-green-400">
+                {getTotal().toFixed(2)} ₽
+              </span>
+            </div>
+          </div>
+          
+          {/* Оплата */}
+          <div className="flex gap-2 mt-3">
+            <select
+              value={paymentMethod}
+              onChange={(e) => setPaymentMethod(e.target.value as 'cash' | 'card')}
+              className="bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg px-3 py-2 text-xs font-bold text-gray-700 dark:text-slate-300 focus:outline-none focus:border-green-500"
+            >
+              <option value="cash">Наличные</option>
+              <option value="card">Карта</option>
+            </select>
+            
+            {paymentMethod === 'cash' && (
+              <input
+                type="number"
+                placeholder="Внесено ₽"
+                value={paidAmount || ''}
+                onChange={(e) => setPaidAmount(parseFloat(e.target.value) || 0)}
+                className="flex-1 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-green-500"
+                step="0.01"
+              />
+            )}
+            
+            <button
+              onClick={handlePayment}
+              disabled={loading || cart.length === 0}
+              className="flex-1 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 dark:disabled:bg-slate-700 text-white rounded-lg text-xs font-bold transition-colors disabled:cursor-not-allowed flex items-center justify-center space-x-1"
+            >
+              {loading ? (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              ) : (
+                <>
+                  <CreditCard className="w-4 h-4" />
+                  <span>Оплатить</span>
+                </>
+              )}
+            </button>
+          </div>
+          
+          <button
+            onClick={clearCart}
+            disabled={cart.length === 0}
+            className="w-full mt-2 py-1.5 bg-red-100 hover:bg-red-200 disabled:bg-gray-100 dark:bg-red-950/20 dark:hover:bg-red-950/40 dark:disabled:bg-slate-800 text-red-700 dark:text-red-400 disabled:text-gray-400 dark:disabled:text-slate-600 rounded-lg text-xs font-bold transition-colors disabled:cursor-not-allowed"
+          >
+            Очистить чек
+          </button>
+        </div>
+        
+        {/* Правая колонка: История чеков */}
+        <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-xl p-4">
+          <div className="flex justify-between items-center mb-3">
+            <h4 className="text-xs font-black text-gray-700 dark:text-slate-300">
+              📋 История чеков
+            </h4>
+            <span className="text-[10px] text-gray-400">
+              Сегодня: {receipts.length} чеков
+            </span>
+          </div>
+          
+          <div className="space-y-2 max-h-[300px] overflow-y-auto">
+            {receipts.length === 0 ? (
+              <div className="text-center py-8 text-gray-400 text-xs">
+                Нет чеков за сегодня
+              </div>
+            ) : (
+              receipts.map((receipt) => (
+                <div
+                  key={receipt.id}
+                  className="bg-gray-50 dark:bg-slate-800 rounded-lg p-3 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+                >
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <span className="text-xs font-bold text-gray-900 dark:text-slate-100 block">
+                        Чек №{receipt.receipt_number}
+                        {receipt.is_return && (
+                          <span className="ml-2 text-[10px] text-red-500 font-bold">(Возврат)</span>
+                        )}
+                      </span>
+                      <span className="text-[10px] text-gray-400">
+                        {new Date(receipt.created_at).toLocaleString('ru-RU')}
+                      </span>
+                      <span className="text-[10px] text-gray-400 block">
+                        {receipt.receipt_items?.length || 0} товаров
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-sm font-bold text-green-600 dark:text-green-400">
+                        {receipt.total_amount.toFixed(2)} ₽
+                      </span>
+                      <div className="flex gap-1 mt-1">
+                        <button
+                          onClick={() => handleDownloadReceipt(receipt)}
+                          className="px-2 py-1 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 rounded text-[10px] font-bold hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors flex items-center space-x-1"
+                          title="Скачать чек"
+                        >
+                          <Download className="w-3 h-3" />
+                          <span>Скачать</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+          
+          <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-800">
+            <button className="w-full py-2 bg-gray-200 dark:bg-slate-800 hover:bg-gray-300 dark:hover:bg-slate-700 rounded-lg text-xs font-bold transition-colors flex items-center justify-center space-x-2">
+              <Printer className="w-4 h-4" />
+              <span>Скачать отчёт за смену (PDF)</span>
+            </button>
+          </div>
+        </div>
+        
+      </div>
+    </div>
+  );
+}

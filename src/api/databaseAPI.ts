@@ -798,3 +798,157 @@ export async function getEmployeeWithPasswordHash(username: string) {
   
   return data;
 }
+// ==========================================================
+// 23. РАБОТА С ЧЕКАМИ (RECEIPTS)
+// ==========================================================
+
+// Создание нового чека
+export async function createReceipt(receipt: any) {
+  const { data, error } = await supabase
+    .from('receipts')
+    .insert([{
+      id: receipt.id || `rec_${Date.now()}`,
+      receipt_number: receipt.receipt_number,
+      cashier_id: receipt.cashier_id,
+      store_id: receipt.store_id || 'store_1',
+      total_amount: receipt.total_amount,
+      payment_method: receipt.payment_method,
+      paid_amount: receipt.paid_amount,
+      change_amount: receipt.change_amount || 0,
+      is_return: receipt.is_return || false,
+      return_for_id: receipt.return_for_id || null,
+      created_at: new Date().toISOString()
+    }])
+    .select();
+  
+  if (error) {
+    console.error('❌ Ошибка создания чека:', error);
+    throw error;
+  }
+  return data?.[0];
+}
+
+// Создание позиций чека
+export async function createReceiptItems(items: any[]) {
+  const formattedItems = items.map(item => ({
+    id: item.id || `ritem_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+    receipt_id: item.receipt_id,
+    product_id: item.product_id,
+    batch_id: item.batch_id,
+    quantity: item.quantity,
+    unit_price: item.unit_price,
+    total_price: item.total_price || (item.quantity * item.unit_price),
+    discount_percent: item.discount_percent || 0,
+    discount_amount: item.discount_amount || 0,
+    created_at: new Date().toISOString()
+  }));
+
+  const { data, error } = await supabase
+    .from('receipt_items')
+    .insert(formattedItems)
+    .select();
+  
+  if (error) {
+    console.error('❌ Ошибка создания позиций чека:', error);
+    throw error;
+  }
+  return data || [];
+}
+
+// Получение всех чеков за сегодня
+export async function getTodayReceipts(cashierId?: string) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayStr = today.toISOString();
+  
+  let query = supabase
+    .from('receipts')
+    .select('*, receipt_items(*)')
+    .gte('created_at', todayStr)
+    .order('created_at', { ascending: false });
+  
+  if (cashierId) {
+    query = query.eq('cashier_id', cashierId);
+  }
+  
+  const { data, error } = await query;
+  
+  if (error) {
+    console.error('❌ Ошибка получения чеков:', error);
+    throw error;
+  }
+  return data || [];
+}
+
+// Получение чека по ID
+export async function getReceiptById(receiptId: string) {
+  const { data, error } = await supabase
+    .from('receipts')
+    .select('*, receipt_items(*)')
+    .eq('id', receiptId)
+    .single();
+  
+  if (error) {
+    console.error('❌ Ошибка получения чека:', error);
+    throw error;
+  }
+  return data;
+}
+
+// Поиск товаров для кассира
+export async function searchProductsForSale(searchTerm: string) {
+  const { data, error } = await supabase
+    .from('products')
+    .select('*, categories(*)')
+    .ilike('name', `%${searchTerm}%`)
+    .limit(20);
+  
+  if (error) {
+    console.error('❌ Ошибка поиска товаров:', error);
+    throw error;
+  }
+  return data || [];
+}
+
+// Получение доступных партий для товара (с остатками)
+export async function getAvailableBatches(productId: string) {
+  const { data, error } = await supabase
+    .from('batches')
+    .select('*, shelf_locations(*)')
+    .eq('product_id', productId)
+    .gt('quantity', 0)
+    .eq('is_written_off', false)
+    .order('expiration_date', { ascending: true });
+  
+  if (error) {
+    console.error('❌ Ошибка получения партий:', error);
+    throw error;
+  }
+  return data || [];
+}
+
+// Формирование номера чека
+export async function getNextReceiptNumber(storeId: string = 'store_1') {
+  const today = new Date();
+  const dateStr = today.toISOString().split('T')[0].replace(/-/g, '');
+  
+  const { data, error } = await supabase
+    .from('receipts')
+    .select('receipt_number')
+    .ilike('receipt_number', `${dateStr}%`)
+    .order('created_at', { ascending: false })
+    .limit(1);
+  
+  if (error) {
+    console.error('❌ Ошибка получения номера чека:', error);
+    return `${dateStr}-0001`;
+  }
+  
+  if (data && data.length > 0) {
+    const lastNumber = parseInt(data[0].receipt_number.split('-')[1]);
+    const newNumber = String(lastNumber + 1).padStart(4, '0');
+    return `${dateStr}-${newNumber}`;
+  }
+  
+  return `${dateStr}-0001`;
+}
