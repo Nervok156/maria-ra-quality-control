@@ -897,22 +897,42 @@ export async function getReceiptById(receiptId: string) {
 
 // Поиск товаров для кассира
 export async function searchProductsForSale(searchTerm: string) {
-  const { data, error } = await supabase
+  // Сначала получаем все товары
+  const { data: products, error: productsError } = await supabase
     .from('products')
     .select('*, categories(*)')
     .ilike('name', `%${searchTerm}%`)
-    .limit(20);
+    .limit(30);
   
-  if (error) {
-    console.error('❌ Ошибка поиска товаров:', error);
-    throw error;
+  if (productsError) {
+    console.error('❌ Ошибка поиска товаров:', productsError);
+    throw productsError;
   }
-  
-  // Добавляем поле price для совместимости
-  return (data || []).map(product => ({
-    ...product,
-    price: product.base_price || 0
-  }));
+
+  // Получаем все активные партии
+  const { data: batches, error: batchesError } = await supabase
+    .from('batches')
+    .select('product_id, quantity')
+    .gt('quantity', 0)
+    .eq('is_written_off', false);
+
+  if (batchesError) {
+    console.error('❌ Ошибка получения партий:', batchesError);
+    throw batchesError;
+  }
+
+  // Создаём Set из product_id, у которых есть активные партии
+  const productIdsWithStock = new Set(batches.map(b => b.product_id));
+
+  // Фильтруем товары: оставляем только те, у которых есть остатки
+  const filteredProducts = (products || [])
+    .filter(product => productIdsWithStock.has(product.id))
+    .map(product => ({
+      ...product,
+      price: product.base_price || 0
+    }));
+
+  return filteredProducts;
 }
 
 // Получение доступных партий для товара (с остатками)
