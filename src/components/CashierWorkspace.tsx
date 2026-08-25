@@ -130,7 +130,7 @@ export default function CashierWorkspace({ currentUser, onDataChange }: CashierW
         ));
       } else {
         // Добавляем новый товар
-        const unitPrice = product.price || 0;
+        const unitPrice = product.base_price || product.price || 0;
         setCart([...cart, {
           product,
           batchId: batch.id,
@@ -360,8 +360,8 @@ export default function CashierWorkspace({ currentUser, onDataChange }: CashierW
                       {product.name || 'Без названия'}
                     </span>
                     <span className="text-[10px] text-gray-400">
-                      {product.price || 0} ₽ | {product.barcode || 'Нет штрихкода'}
-                    </span>
+  {product.base_price || product.price || 0} ₽ | {product.barcode || 'Нет штрихкода'}
+</span>
                   </div>
                   <button
                     onClick={() => addToCart(product)}

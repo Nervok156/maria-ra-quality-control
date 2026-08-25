@@ -907,7 +907,12 @@ export async function searchProductsForSale(searchTerm: string) {
     console.error('❌ Ошибка поиска товаров:', error);
     throw error;
   }
-  return data || [];
+  
+  // Добавляем поле price для совместимости
+  return (data || []).map(product => ({
+    ...product,
+    price: product.base_price || 0
+  }));
 }
 
 // Получение доступных партий для товара (с остатками)

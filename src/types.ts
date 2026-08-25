@@ -12,7 +12,8 @@ export interface Product {
   barcode: string;
   name: string;
   category: ProductCategory;
-  price: number;
+    price: number;           // для совместимости
+  base_price?: number;  
   quantity: number;
   expirationDate: string;
   manufactureDate?: string;
