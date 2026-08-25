@@ -244,10 +244,10 @@ export default function CashierWorkspace({ currentUser, onDataChange }: CashierW
   // СКАЧИВАНИЕ ЧЕКОВ И ОТЧЁТОВ
   // ==========================================================
   const handleDownloadReceipt = (receipt: any) => {
-    const items = receipt.receipt_items || [];
-    const date = new Date(receipt.created_at).toLocaleString('ru-RU');
-    
-    let text = `
+  const items = receipt.receipt_items || [];
+  const date = new Date(receipt.created_at).toLocaleString('ru-RU');
+  
+  let text = `
 ==================================================
     ТС «Мария-Ра» - Филиал №142
     г. Барнаул, пр. Ленина, 54
@@ -259,12 +259,13 @@ export default function CashierWorkspace({ currentUser, onDataChange }: CashierW
 Товар                           Кол-во   Цена
 --------------------------------------------------`;
 
-    items.forEach((item: any) => {
-      const productName = item.products?.name || 'Товар';
-      text += `\n${productName.padEnd(35)} ${item.quantity} x ${item.unit_price} = ${item.total_price} ₽`;
-    });
+  items.forEach((item: any) => {
+    // ✅ Используем products.name из связанной таблицы
+    const productName = item.products?.name || 'Товар без названия';
+    text += `\n${productName.padEnd(35)} ${item.quantity} x ${item.unit_price} = ${item.total_price} ₽`;
+  });
 
-    text += `
+  text += `
 --------------------------------------------------
 ИТОГО:                                    ${receipt.total_amount.toFixed(2)} ₽
 Оплата: ${receipt.payment_method === 'cash' ? 'Наличные' : 'Карта'}
@@ -276,39 +277,37 @@ export default function CashierWorkspace({ currentUser, onDataChange }: CashierW
 ==================================================
     `;
 
-    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `чек_${receipt.receipt_number}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `чек_${receipt.receipt_number}.txt`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+};
 
   // ==========================================================
   // СКАЧИВАНИЕ ОТЧЁТА ЗА СМЕНУ
   // ==========================================================
   const handleDownloadShiftReport = () => {
-    if (!receipts || receipts.length === 0) {
-      setError('Нет чеков за сегодня');
-      setTimeout(() => setError(null), 3000);
-      return;
-    }
+  if (!receipts || receipts.length === 0) {
+    setError('Нет чеков за сегодня');
+    setTimeout(() => setError(null), 3000);
+    return;
+  }
 
-    const date = new Date().toLocaleDateString('ru-RU');
-    
-    // Рассчитываем общую выручку
-    const totalRevenue = receipts.reduce((sum: number, r: any) => sum + (r.total_amount || 0), 0);
-    
-    // Рассчитываем общее количество товаров (штук)
-    const totalItems = receipts.reduce((sum: number, r: any) => {
-      const items = r.receipt_items || [];
-      return sum + items.reduce((itemSum: number, item: any) => itemSum + (item.quantity || 0), 0);
-    }, 0);
-    
-    let text = `
+  const date = new Date().toLocaleDateString('ru-RU');
+  
+  const totalRevenue = receipts.reduce((sum: number, r: any) => sum + (r.total_amount || 0), 0);
+  
+  const totalItems = receipts.reduce((sum: number, r: any) => {
+    const items = r.receipt_items || [];
+    return sum + items.reduce((itemSum: number, item: any) => itemSum + (item.quantity || 0), 0);
+  }, 0);
+  
+  let text = `
 ==================================================
     ТС «Мария-Ра» - Филиал №142
     г. Барнаул, пр. Ленина, 54
@@ -325,36 +324,41 @@ export default function CashierWorkspace({ currentUser, onDataChange }: CashierW
     ЧЕКИ ЗА СМЕНУ:
 `;
 
-    receipts.forEach((receipt: any, index: number) => {
-      const items = receipt.receipt_items || [];
-      const totalQtyInReceipt = items.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0);
-      
-      text += `
+  receipts.forEach((receipt: any, index: number) => {
+    const items = receipt.receipt_items || [];
+    const totalQtyInReceipt = items.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0);
+    
+    text += `
 ${index + 1}. Чек №${receipt.receipt_number}
    Время: ${new Date(receipt.created_at).toLocaleTimeString('ru-RU')}
    Товаров (шт.): ${totalQtyInReceipt}
    Сумма: ${receipt.total_amount?.toFixed(2) || '0.00'} ₽
    Оплата: ${receipt.payment_method === 'cash' ? 'Наличные' : 'Карта'}
-`;
+   Товары:`;
+    
+    items.forEach((item: any) => {
+      const productName = item.products?.name || 'Товар без названия';
+      text += `\n     - ${productName} (${item.quantity} шт.)`;
     });
+  });
 
-    text += `
+  text += `
 ==================================================
     КОНЕЦ ОТЧЁТА
     Спасибо за работу!
 ==================================================
     `;
 
-    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `отчёт_за_смену_${date}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `отчёт_за_смену_${date}.txt`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+};
 
   // ==========================================================
   // JSX
@@ -564,13 +568,13 @@ ${index + 1}. Чек №${receipt.receipt_number}
             {/* ✅ СПИСОК ТОВАРОВ В ЧЕКЕ */}
             <div className="mt-2 space-y-0.5">
               {(receipt.receipt_items || []).map((item: any, idx: number) => (
-                <div key={idx} className="text-xs text-gray-600 dark:text-gray-400 flex justify-between">
-                  <span className="truncate max-w-[200px]">
-                    {item.products?.name || 'Товар'} × {item.quantity}
-                  </span>
-                  <span className="font-medium">{item.total_price?.toFixed(2) || '0.00'} ₽</span>
-                </div>
-              ))}
+  <div key={idx} className="text-xs text-gray-600 dark:text-gray-400 flex justify-between">
+    <span className="truncate max-w-[200px]">
+      {item.products?.name || 'Товар без названия'} × {item.quantity}
+    </span>
+    <span className="font-medium">{item.total_price?.toFixed(2) || '0.00'} ₽</span>
+  </div>
+))}
             </div>
           </div>
           <div className="text-right shrink-0 ml-4">

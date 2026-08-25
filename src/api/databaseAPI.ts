@@ -855,7 +855,6 @@ export async function createReceiptItems(items: any[]) {
   return data || [];
 }
 
-// Получение всех чеков за сегодня
 export async function getTodayReceipts(cashierId?: string) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -863,7 +862,18 @@ export async function getTodayReceipts(cashierId?: string) {
   
   let query = supabase
     .from('receipts')
-    .select('*, receipt_items(*)')
+    .select(`
+      *,
+      receipt_items(
+        *,
+        products(
+          id,
+          name,
+          barcode,
+          base_price
+        )
+      )
+    `)
     .gte('created_at', todayStr)
     .order('created_at', { ascending: false });
   
@@ -884,7 +894,18 @@ export async function getTodayReceipts(cashierId?: string) {
 export async function getReceiptById(receiptId: string) {
   const { data, error } = await supabase
     .from('receipts')
-    .select('*, receipt_items(*)')
+    .select(`
+      *,
+      receipt_items(
+        *,
+        products(
+          id,
+          name,
+          barcode,
+          base_price
+        )
+      )
+    `)
     .eq('id', receiptId)
     .single();
   
