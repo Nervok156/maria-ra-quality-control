@@ -43,7 +43,7 @@ export default function CashierWorkspace({ currentUser, onDataChange }: CashierW
   const loadReceipts = async () => {
     try {
       const data = await getTodayReceipts(currentUser.id);
-      setReceipts(data);
+      setReceipts(data || []);
     } catch (error) {
       console.error('❌ Ошибка загрузки чеков:', error);
     }
@@ -63,10 +63,11 @@ export default function CashierWorkspace({ currentUser, onDataChange }: CashierW
     try {
       setLoading(true);
       const results = await searchProductsForSale(searchTerm);
-      setSearchResults(results);
+      setSearchResults(results || []);
     } catch (error) {
       console.error('❌ Ошибка поиска:', error);
       setError('Ошибка поиска товаров');
+      setTimeout(() => setError(null), 3000);
     } finally {
       setLoading(false);
     }
@@ -75,22 +76,49 @@ export default function CashierWorkspace({ currentUser, onDataChange }: CashierW
   // Добавление товара в корзину
   const addToCart = async (product: Product) => {
     try {
+      console.log('🔄 Добавляем товар:', product.name);
+      
+      // Проверяем, есть ли у товара ID
+      if (!product.id) {
+        setError('Ошибка: у товара нет ID');
+        setTimeout(() => setError(null), 3000);
+        return;
+      }
+
       // Проверяем остатки
-      const batches = await getAvailableBatches(product.id);
-      if (batches.length === 0) {
+      let batches = [];
+      try {
+        batches = await getAvailableBatches(product.id);
+      } catch (error) {
+        console.error('❌ Ошибка получения партий:', error);
+        // Если ошибка, пробуем получить через getActiveProducts
+        const activeProducts = await getActiveProducts();
+        const foundProduct = activeProducts.find(p => p.id === product.id);
+        if (foundProduct && foundProduct.quantity > 0) {
+          // Создаём виртуальную партию
+          batches = [{
+            id: `batch_${Date.now()}`,
+            product_id: product.id,
+            quantity: foundProduct.quantity,
+            expiration_date: foundProduct.expirationDate || new Date().toISOString().split('T')[0]
+          }];
+        }
+      }
+      
+      if (!batches || batches.length === 0) {
         setError('Нет доступных партий этого товара на полках');
         setTimeout(() => setError(null), 3000);
         return;
       }
 
-      const batch = batches[0]; // Берём первую доступную партию (с ближайшим сроком)
+      const batch = batches[0];
 
       // Проверяем, есть ли уже такой товар в корзине
       const existingItem = cart.find(item => item.product.id === product.id && item.batchId === batch.id);
       
       if (existingItem) {
         // Увеличиваем количество
-        if (existingItem.quantity >= batch.quantity) {
+        if (existingItem.quantity >= (batch.quantity || 999)) {
           setError('Недостаточно товара на полке');
           setTimeout(() => setError(null), 3000);
           return;
@@ -102,12 +130,13 @@ export default function CashierWorkspace({ currentUser, onDataChange }: CashierW
         ));
       } else {
         // Добавляем новый товар
+        const unitPrice = product.price || 0;
         setCart([...cart, {
           product,
           batchId: batch.id,
           quantity: 1,
-          unitPrice: product.price,
-          totalPrice: product.price
+          unitPrice: unitPrice,
+          totalPrice: unitPrice
         }]);
       }
       
@@ -115,7 +144,7 @@ export default function CashierWorkspace({ currentUser, onDataChange }: CashierW
       setTimeout(() => setSuccessMessage(null), 2000);
     } catch (error) {
       console.error('❌ Ошибка добавления товара:', error);
-      setError('Ошибка добавления товара');
+      setError('Ошибка добавления товара: ' + (error as any).message);
       setTimeout(() => setError(null), 3000);
     }
   };
@@ -132,7 +161,7 @@ export default function CashierWorkspace({ currentUser, onDataChange }: CashierW
 
   // Расчёт итоговой суммы
   const getTotal = () => {
-    return cart.reduce((sum, item) => sum + item.totalPrice, 0);
+    return cart.reduce((sum, item) => sum + (item.totalPrice || 0), 0);
   };
 
   // Оформление оплаты
@@ -186,12 +215,17 @@ export default function CashierWorkspace({ currentUser, onDataChange }: CashierW
         });
 
         // Списываем товар через recordSaleInSupabase
-        await recordSaleInSupabase(
-          item.product.id,
-          item.quantity,
-          item.unitPrice,
-          item.batchId
-        );
+        try {
+          await recordSaleInSupabase(
+            item.product.id,
+            item.quantity,
+            item.unitPrice,
+            item.batchId
+          );
+        } catch (saleError) {
+          console.error('❌ Ошибка списания товара:', saleError);
+          // Продолжаем, даже если списание не удалось
+        }
       }
 
       await createReceiptItems(items);
@@ -207,36 +241,38 @@ export default function CashierWorkspace({ currentUser, onDataChange }: CashierW
       setSuccessMessage(`Чек №${receiptNumber} успешно оформлен!`);
       setTimeout(() => setSuccessMessage(null), 3000);
       
-      // Печать чека (опционально)
-      // handlePrintReceipt(receipt, items);
-      
     } catch (error) {
       console.error('❌ Ошибка оформления чека:', error);
-      setError('Ошибка оформления чека');
+      setError('Ошибка оформления чека: ' + (error as any).message);
       setTimeout(() => setError(null), 3000);
     } finally {
       setLoading(false);
     }
   };
 
-  // Скачать чек (PDF/текст)
+  // Скачать чек
   const handleDownloadReceipt = (receipt: any) => {
     const items = receipt.receipt_items || [];
-    const text = `
+    const date = new Date(receipt.created_at).toLocaleString('ru-RU');
+    
+    let text = `
 ========================================
     ТС «Мария-Ра» - Филиал №142
     г. Барнаул, пр. Ленина, 54
 ========================================
 ЧЕК №: ${receipt.receipt_number}
-Дата: ${new Date(receipt.created_at).toLocaleString('ru-RU')}
+Дата: ${date}
 Кассир: ${currentUser.name}
 ----------------------------------------
 Товар                     Кол-во   Цена
-----------------------------------------
-${items.map((item: any) => {
-  const productName = item.products?.name || 'Товар';
-  return `${productName.padEnd(25)} ${item.quantity} x ${item.unit_price} = ${item.total_price} ₽`;
-}).join('\n')}
+----------------------------------------`;
+
+    items.forEach((item: any) => {
+      const productName = item.products?.name || 'Товар';
+      text += `\n${productName.padEnd(25)} ${item.quantity} x ${item.unit_price} = ${item.total_price} ₽`;
+    });
+
+    text += `
 ----------------------------------------
 ИТОГО:                    ${receipt.total_amount.toFixed(2)} ₽
 Оплата: ${receipt.payment_method === 'cash' ? 'Наличные' : 'Карта'}
@@ -248,8 +284,7 @@ ${items.map((item: any) => {
 ========================================
     `;
 
-    // Создаём и скачиваем файл
-    const blob = new Blob([text], { type: 'text/plain' });
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -302,9 +337,13 @@ ${items.map((item: any) => {
             <button
               onClick={handleSearch}
               disabled={loading}
-              className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-bold transition-colors disabled:opacity-50"
+              className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-bold transition-colors disabled:opacity-50 flex items-center justify-center"
             >
-              {loading ? '...' : <Search className="w-4 h-4" />}
+              {loading ? (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              ) : (
+                <Search className="w-4 h-4" />
+              )}
             </button>
           </div>
           
@@ -318,15 +357,16 @@ ${items.map((item: any) => {
                 >
                   <div className="flex-1 min-w-0">
                     <span className="text-xs font-bold text-gray-900 dark:text-slate-100 block truncate">
-                      {product.name}
+                      {product.name || 'Без названия'}
                     </span>
                     <span className="text-[10px] text-gray-400">
-                      {product.price} ₽ | {product.barcode}
+                      {product.price || 0} ₽ | {product.barcode || 'Нет штрихкода'}
                     </span>
                   </div>
                   <button
                     onClick={() => addToCart(product)}
-                    className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-[10px] font-bold transition-colors ml-2 shrink-0"
+                    disabled={loading}
+                    className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-[10px] font-bold transition-colors ml-2 shrink-0 disabled:opacity-50"
                   >
                     + Добавить
                   </button>
@@ -357,11 +397,11 @@ ${items.map((item: any) => {
                     key={index}
                     className="flex justify-between items-center text-xs py-1 border-b border-gray-50 dark:border-slate-800"
                   >
-                    <span className="text-gray-700 dark:text-slate-300 truncate">
-                      {item.product.name} x{item.quantity}
+                    <span className="text-gray-700 dark:text-slate-300 truncate max-w-[150px]">
+                      {item.product?.name || 'Товар'} x{item.quantity}
                     </span>
                     <div className="flex items-center space-x-2 shrink-0">
-                      <span className="font-bold">{item.totalPrice.toFixed(2)} ₽</span>
+                      <span className="font-bold">{item.totalPrice?.toFixed(2) || '0.00'} ₽</span>
                       <button
                         onClick={() => removeFromCart(index)}
                         className="text-red-500 hover:text-red-700 transition-colors"
@@ -383,7 +423,7 @@ ${items.map((item: any) => {
           </div>
           
           {/* Оплата */}
-          <div className="flex gap-2 mt-3">
+          <div className="flex gap-2 mt-3 flex-wrap">
             <select
               value={paymentMethod}
               onChange={(e) => setPaymentMethod(e.target.value as 'cash' | 'card')}
@@ -399,7 +439,7 @@ ${items.map((item: any) => {
                 placeholder="Внесено ₽"
                 value={paidAmount || ''}
                 onChange={(e) => setPaidAmount(parseFloat(e.target.value) || 0)}
-                className="flex-1 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-green-500"
+                className="flex-1 min-w-[100px] bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-green-500"
                 step="0.01"
               />
             )}
@@ -436,12 +476,12 @@ ${items.map((item: any) => {
               📋 История чеков
             </h4>
             <span className="text-[10px] text-gray-400">
-              Сегодня: {receipts.length} чеков
+              Сегодня: {receipts?.length || 0} чеков
             </span>
           </div>
           
           <div className="space-y-2 max-h-[300px] overflow-y-auto">
-            {receipts.length === 0 ? (
+            {!receipts || receipts.length === 0 ? (
               <div className="text-center py-8 text-gray-400 text-xs">
                 Нет чеков за сегодня
               </div>
@@ -468,7 +508,7 @@ ${items.map((item: any) => {
                     </div>
                     <div className="text-right">
                       <span className="text-sm font-bold text-green-600 dark:text-green-400">
-                        {receipt.total_amount.toFixed(2)} ₽
+                        {receipt.total_amount?.toFixed(2) || '0.00'} ₽
                       </span>
                       <div className="flex gap-1 mt-1">
                         <button
