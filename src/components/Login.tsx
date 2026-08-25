@@ -31,7 +31,7 @@ export default function Login({ onLogin }: LoginProps) {
   const [timeLeft, setTimeLeft] = useState<number>(0);
   const [isBlocked, setIsBlocked] = useState(false);
 
-  const MAX_ATTEMPTS = 5;
+  const MAX_ATTEMPTS = 999
   const BLOCK_DURATION = 5 * 60 * 1000; // 5 минут
 
   useEffect(() => {
