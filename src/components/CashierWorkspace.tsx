@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Search, Plus, Trash2, ShoppingCart, CreditCard, 
-  Printer, Download, X, CheckCircle, AlertCircle
+  Search, Trash2, CreditCard, 
+  Printer, Download, CheckCircle, AlertCircle
 } from 'lucide-react';
 import { 
   searchProductsForSale, 
@@ -39,6 +39,9 @@ export default function CashierWorkspace({ currentUser, onDataChange }: CashierW
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card'>('cash');
   const [paidAmount, setPaidAmount] = useState<number>(0);
 
+  // ==========================================================
+  // ЗАГРУЗКА ЧЕКОВ
+  // ==========================================================
   const loadReceipts = async () => {
     try {
       const data = await getTodayReceipts(currentUser.id);
@@ -52,6 +55,9 @@ export default function CashierWorkspace({ currentUser, onDataChange }: CashierW
     loadReceipts();
   }, []);
 
+  // ==========================================================
+  // ПОИСК ТОВАРОВ
+  // ==========================================================
   const handleSearch = async () => {
     if (!searchTerm.trim()) {
       setSearchResults([]);
@@ -71,6 +77,9 @@ export default function CashierWorkspace({ currentUser, onDataChange }: CashierW
     }
   };
 
+  // ==========================================================
+  // КОРЗИНА
+  // ==========================================================
   const addToCart = async (product: Product) => {
     try {
       console.log('🔄 Добавляем товар:', product.name);
@@ -148,9 +157,12 @@ export default function CashierWorkspace({ currentUser, onDataChange }: CashierW
   };
 
   const getTotal = () => {
-    return cart.reduce((sum, item) => sum + (item.totalPrice || 0), 0);
+    return cart.reduce((sum: number, item: CartItem) => sum + (item.totalPrice || 0), 0);
   };
 
+  // ==========================================================
+  // ОПЛАТА
+  // ==========================================================
   const handlePayment = async () => {
     if (cart.length === 0) {
       setError('Корзина пуста');
@@ -228,6 +240,9 @@ export default function CashierWorkspace({ currentUser, onDataChange }: CashierW
     }
   };
 
+  // ==========================================================
+  // СКАЧИВАНИЕ ЧЕКОВ И ОТЧЁТОВ
+  // ==========================================================
   const handleDownloadReceipt = (receipt: any) => {
     const items = receipt.receipt_items || [];
     const date = new Date(receipt.created_at).toLocaleString('ru-RU');
@@ -272,7 +287,6 @@ export default function CashierWorkspace({ currentUser, onDataChange }: CashierW
     URL.revokeObjectURL(url);
   };
 
-  // Скачать отчёт за смену
   const handleDownloadShiftReport = () => {
     if (!receipts || receipts.length === 0) {
       setError('Нет чеков за сегодня');
@@ -281,8 +295,12 @@ export default function CashierWorkspace({ currentUser, onDataChange }: CashierW
     }
 
     const date = new Date().toLocaleDateString('ru-RU');
-    const totalRevenue = receipts.reduce((sum, r) => sum + (r.total_amount || 0), 0);
-    const totalItems = receipts.reduce((sum, r) => sum + (r.receipt_items?.length || 0), 0);
+    const totalRevenue = receipts.reduce((sum: number, r: any) => sum + (r.total_amount || 0), 0);
+    
+    const totalItems = receipts.reduce((sum: number, r: any) => {
+      const items = r.receipt_items || [];
+      return sum + items.reduce((itemSum: number, item: any) => itemSum + (item.quantity || 0), 0);
+    }, 0);
     
     let text = `
 ========================================
@@ -295,18 +313,20 @@ export default function CashierWorkspace({ currentUser, onDataChange }: CashierW
 ========================================
     ИТОГИ:
     Всего чеков: ${receipts.length}
-    Всего товаров: ${totalItems}
+    Всего товаров (шт.): ${totalItems}
     Общая выручка: ${totalRevenue.toFixed(2)} ₽
 ========================================
     ЧЕКИ ЗА СМЕНУ:
 `;
 
-    receipts.forEach((receipt, index) => {
+    receipts.forEach((receipt: any, index: number) => {
       const items = receipt.receipt_items || [];
+      const totalQtyInReceipt = items.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0);
+      
       text += `
 ${index + 1}. Чек №${receipt.receipt_number}
    Время: ${new Date(receipt.created_at).toLocaleTimeString('ru-RU')}
-   Товаров: ${items.length}
+   Товаров (шт.): ${totalQtyInReceipt}
    Сумма: ${receipt.total_amount?.toFixed(2) || '0.00'} ₽
    Оплата: ${receipt.payment_method === 'cash' ? 'Наличные' : 'Карта'}
 `;
@@ -330,6 +350,9 @@ ${index + 1}. Чек №${receipt.receipt_number}
     URL.revokeObjectURL(url);
   };
 
+  // ==========================================================
+  // JSX
+  // ==========================================================
   return (
     <div className="space-y-6">
       <h3 className="text-base font-black text-gray-900 dark:text-slate-100 uppercase tracking-tight">
