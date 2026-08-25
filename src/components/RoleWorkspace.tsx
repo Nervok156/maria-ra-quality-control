@@ -1065,216 +1065,152 @@ useEffect(() => {
       )}
 
       {/* --- RENDER 4: COMMODITY CASHIER WORKSPACE --- */}
-      {currentUser.role === 'Товаровед-кассир' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          
-          <div className="bg-gray-950 text-slate-100 rounded-2xl p-4 border-4 border-slate-700 shadow-md flex flex-col justify-between font-mono relative overflow-hidden h-[360px]">
-            <div className="absolute top-0 right-0 p-2 bg-emerald-500 text-slate-950 text-[8px] font-black rounded-bl uppercase">
-              ТСД-10 ONLINE
-            </div>
-            
-            <div className="space-y-3">
-              <div className="flex items-center space-x-1.5 text-emerald-400 border-b border-slate-800 pb-2">
-                <Barcode className="w-5 h-5" />
-                <span className="text-xs uppercase font-extrabold">Лазерный ТСД Терминал</span>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[9px] text-slate-400 uppercase block font-bold">Выберите товар на полке для наведения лазера:</label>
-                <select
-                  value={tsdSelectedProduct}
-                  onChange={(e) => setTsdSelectedProduct(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-2 text-xs font-bold text-emerald-400 focus:outline-none"
-                >
-                  <option value="">-- НАВЕДИТЕ ЛАЗЕР НА ШТРИХКОД --</option>
-                  {dbState.products.map(p => (
-                    <option key={p.id} value={p.id}>{p.name} ({p.barcode})</option>
-                  ))}
-                </select>
-              </div>
-
-              {tsdSelectedProduct ? (
-                (() => {
-                  const prod = dbState.products.find(p => p.id === tsdSelectedProduct);
-                  const bList = dbState.batches.filter(b => b.product_id === tsdSelectedProduct && b.quantity > 0);
-                  const totalQty = bList.reduce((s, b) => s + b.quantity, 0);
-
-                  return (
-                    <div className="bg-slate-900/60 p-2.5 rounded-lg border border-slate-800 text-[11px] space-y-1 text-slate-300">
-                      <div><span className="text-slate-500">АРТИКУЛ:</span> <span className="text-slate-100 font-bold">{prod?.name}</span></div>
-                      <div><span className="text-slate-500">ШТРИХКОД:</span> <span className="text-emerald-400 font-mono font-bold">{prod?.barcode}</span></div>
-                      <div><span className="text-slate-500">ОСТАТОК В ЗАЛЕ:</span> <span className="text-amber-400 font-black">{totalQty} шт.</span> ({bList.length} активных партий)</div>
-                      {bList.length > 0 && (
-                        <div className="text-red-400 text-[10px] font-bold mt-1">
-                          ➔ Срок годности ближайшего: {bList[0].expiration_date.split('-').reverse().join('.')}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })()
-              ) : (
-                <div className="bg-slate-900/40 py-8 rounded-lg border border-dashed border-slate-800 text-center text-xs text-slate-500 font-bold">
-                  [ ОЖИДАНИЕ СКАНИРОВАНИЯ ТОВАРА ]
-                </div>
-              )}
-            </div>
-
-            <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-900">
-              <button
-                onClick={() => handleTsdMarkdown(30)}
-                disabled={!tsdSelectedProduct}
-                className="bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-800 disabled:text-slate-600 text-slate-950 rounded py-2 text-[10px] font-black uppercase text-center cursor-pointer transition-all active:scale-97"
-              >
-                Уценка -30%
-              </button>
-              <button
-                onClick={() => handleTsdMarkdown(50)}
-                disabled={!tsdSelectedProduct}
-                className="bg-amber-400 hover:bg-amber-500 disabled:bg-slate-800 disabled:text-slate-600 text-slate-950 rounded py-2 text-[10px] font-black uppercase text-center cursor-pointer transition-all active:scale-97"
-              >
-                Уценка -50%
-              </button>
-              <button
-                onClick={handleTsdWriteOff}
-                disabled={!tsdSelectedProduct}
-                className="bg-red-600 hover:bg-red-700 disabled:bg-slate-800 disabled:text-slate-600 text-white rounded py-2 text-[10px] font-black uppercase text-center cursor-pointer transition-all active:scale-97"
-              >
-                ТОРГ-16 списать
-              </button>
-            </div>
-          </div>
-
-          <div className="bg-gray-50/50 dark:bg-slate-850/40 border border-gray-150 dark:border-slate-800/80 rounded-xl p-4 flex flex-col justify-between h-[360px]">
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <h5 className="text-[11px] font-black text-gray-900 dark:text-slate-100 uppercase tracking-wider flex items-center space-x-1.5">
-                  <CreditCard className="w-4 h-4 text-emerald-600" />
-                  <span>Кассовый терминал POS</span>
-                </h5>
-                
-                <div className="flex items-center space-x-1.5 bg-green-100 dark:bg-green-950/40 px-2 py-1 rounded-md">
-                  <input
-                    type="checkbox"
-                    id="auto-sim-checkbox"
-                    checked={salesSimulationActive}
-                    onChange={(e) => setSalesSimulationActive(e.target.checked)}
-                    className="w-3 h-3 text-green-600 rounded focus:ring-green-500 cursor-pointer"
-                  />
-                  <label htmlFor="auto-sim-checkbox" className="text-[9px] font-black uppercase text-green-800 dark:text-green-400 cursor-pointer select-none">
-                    Покупатели {salesSimulationActive ? 'ВКЛ' : 'ВЫКЛ'}
-                  </label>
-                </div>
-              </div>
-              
-              <p className="text-[10px] text-gray-500 dark:text-slate-400 font-medium mb-3 leading-relaxed">
-                Обслуживание покупателей в торговом зале. Каждая покупка списывает остаток товара и записывает прибыль в таблицу <span className="font-mono text-emerald-600 dark:text-emerald-400">sales_log</span>.
-              </p>
-
-              <div className="space-y-2 bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 p-3 rounded-lg text-xs">
-                <div>
-                  <label className="text-[9px] font-black text-gray-400 uppercase block mb-1">Выбор партии с полки:</label>
-                  <select
-                    value={posSelectedBatch}
-                    onChange={(e) => setPosSelectedBatch(e.target.value)}
-                    className="w-full bg-gray-50 dark:bg-slate-800 border border-gray-150 dark:border-slate-700 rounded px-2 py-1.5 font-bold text-gray-800 dark:text-slate-100 text-xs"
-                  >
-                    <option value="">-- Выбрать партию в зале --</option>
-                    {dbState.batches.filter(b => b.quantity > 0).map(b => {
-                      const prod = dbState.products.find(p => p.id === b.product_id);
-                      return (
-                        <option key={b.id} value={b.id}>
-                          {prod?.name} (Партия #${(b.batch_number || b.id || '').slice(-4)} • {b.quantity} шт • {prod?.base_price}₽)
-                        </option>
-                      );
-                    })}
-                  </select>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-[9px] font-black text-gray-400 uppercase block mb-1">Количество, шт:</label>
-                    <input
-                      type="number"
-                      min="1"
-                      value={posQty}
-                      onChange={(e) => setPosQty(e.target.value)}
-                      className="w-full bg-gray-50 dark:bg-slate-800 border border-gray-150 dark:border-slate-700 rounded px-2 py-1.5 font-bold text-gray-850 dark:text-slate-100 text-xs"
-                    />
-                  </div>
-
-                  <div className="flex items-end">
-                    <button
-                      onClick={handleManualSale}
-                      disabled={!posSelectedBatch}
-                      className="w-full py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-100 disabled:text-gray-400 dark:disabled:bg-slate-800 dark:disabled:text-slate-600 text-white font-black uppercase text-[10px] rounded cursor-pointer transition-all active:scale-97"
-                    >
-                      Продать чек
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/30 rounded p-2.5 flex items-start space-x-1.5">
-              <Zap className="w-4 h-4 text-amber-500 shrink-0" />
-              <span className="text-[9px] text-amber-800 dark:text-amber-300 font-medium leading-normal">
-                При включении чекбокса «Покупатели ВКЛ» запускается автоматический робот касс, имитирующий реальный трафик розничных клиентов раз в 4 секунды.
-              </span>
-            </div>
-          </div>
-
-          <div className="bg-gray-50/50 dark:bg-slate-850/40 border border-gray-150 dark:border-slate-800/80 rounded-xl p-4 flex flex-col justify-between h-[360px]">
-            <div>
-              <h5 className="text-[11px] font-black text-gray-900 dark:text-slate-100 uppercase tracking-wider mb-2 flex items-center space-x-1.5">
-                <CheckCircle className="w-4 h-4 text-green-600" />
-                <span>Чек-лента кассового аппарата</span>
-              </h5>
-              <p className="text-[10px] text-gray-500 dark:text-slate-400 font-medium mb-3">
-                Лента продаж кассового узла и системные логи телеметрии ТСД.
-              </p>
-            </div>
-
-            <div className="flex-1 bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-lg p-3 overflow-y-auto custom-scrollbar flex flex-col justify-between">
-              <div className="space-y-1.5 max-h-48 overflow-y-auto custom-scrollbar flex-1 mb-2">
-                {tsdStatusMessage && (
-                  <div className="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/30 text-emerald-800 dark:text-emerald-300 p-2.5 rounded text-[10px] font-bold animate-fade-in flex items-start space-x-1.5">
-                    <span>🎉 {tsdStatusMessage}</span>
-                  </div>
-                )}
-
-                {liveSalesJournal.length === 0 ? (
-                  <div className="text-center py-10 text-gray-400 italic text-[10px]">
-                    Ожидание розничных транзакций. Продайте чек вручную или включите Робот-Симулятор!
-                  </div>
-                ) : (
-                  liveSalesJournal.map(item => (
-                    <div key={item.id} className="text-[10px] font-mono leading-tight border-b border-gray-50 dark:border-slate-850 py-1 font-bold text-emerald-600 dark:text-emerald-400 flex justify-between">
-                      <span className="truncate">🛍️ {item.text}</span>
-                      <span className="text-gray-400 ml-1 shrink-0">{item.time}</span>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              <div className="border-t border-gray-100 dark:border-slate-800 pt-2">
-                <span className="text-[9px] font-black text-gray-400 uppercase block mb-1">Системные логи ТСД:</span>
-                <div className="space-y-1">
-                  {(dbState.system_telemetry || []).slice(0, 2).map(log => {
-                    const emp = dbState.employees.find(e => e.id === log.employee_id)?.name || 'Кассир';
-                    return (
-                      <div key={log.id} className="text-[9px] font-mono leading-tight text-gray-400 dark:text-slate-500">
-                        [{(log.occurred_at || '').slice(11, 19)}] {log.action_type} • {emp}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-            </div>
-          </div>
-
+     {currentUser.role === 'Товаровед-кассир' && (
+  <div className="space-y-4">
+    <h3 className="text-sm font-black text-gray-900 dark:text-slate-100 uppercase tracking-tight">
+      🧾 Кассовый терминал
+    </h3>
+    
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      
+      {/* Левая колонка: Добавление товара и чек */}
+      <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-xl p-4">
+        <h4 className="text-xs font-black text-gray-700 dark:text-slate-300 mb-3">
+          Добавление товара в чек
+        </h4>
+        
+        {/* Поиск товара */}
+        <div className="flex gap-2 mb-3">
+          <input
+            type="text"
+            placeholder="Поиск по названию или штрихкоду..."
+            className="flex-1 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-green-500"
+          />
+          <button className="px-4 py-2 bg-green-600 text-white rounded-lg text-xs font-bold hover:bg-green-700 transition-colors">
+            Найти
+          </button>
         </div>
-      )}
+        
+        {/* Результаты поиска */}
+        <div className="space-y-1 max-h-40 overflow-y-auto mb-3">
+          <div className="flex justify-between items-center p-2 bg-gray-50 dark:bg-slate-800 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 cursor-pointer transition-colors">
+            <div>
+              <span className="text-xs font-bold text-gray-900 dark:text-slate-100 block">Молоко Мария-Ра</span>
+              <span className="text-[10px] text-gray-400">69 ₽ | Остаток: 12 шт.</span>
+            </div>
+            <button className="px-3 py-1 bg-green-600 text-white rounded text-[10px] font-bold hover:bg-green-700 transition-colors">
+              + Добавить
+            </button>
+          </div>
+          <div className="flex justify-between items-center p-2 bg-gray-50 dark:bg-slate-800 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 cursor-pointer transition-colors">
+            <div>
+              <span className="text-xs font-bold text-gray-900 dark:text-slate-100 block">Батон Алтайский</span>
+              <span className="text-[10px] text-gray-400">34 ₽ | Остаток: 15 шт.</span>
+            </div>
+            <button className="px-3 py-1 bg-green-600 text-white rounded text-[10px] font-bold hover:bg-green-700 transition-colors">
+              + Добавить
+            </button>
+          </div>
+        </div>
+        
+        {/* Текущий чек */}
+        <div className="border-t border-gray-100 dark:border-slate-800 pt-3">
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-xs font-black text-gray-700 dark:text-slate-300">Текущий чек</span>
+            <span className="text-xs text-gray-400">3 позиции</span>
+          </div>
+          
+          <div className="space-y-1 max-h-32 overflow-y-auto">
+            <div className="flex justify-between items-center text-xs py-1 border-b border-gray-50 dark:border-slate-800">
+              <span className="text-gray-700 dark:text-slate-300">Молоко x2</span>
+              <span className="font-bold">138 ₽</span>
+            </div>
+            <div className="flex justify-between items-center text-xs py-1 border-b border-gray-50 dark:border-slate-800">
+              <span className="text-gray-700 dark:text-slate-300">Батон x1</span>
+              <span className="font-bold">34 ₽</span>
+            </div>
+          </div>
+          
+          <div className="flex justify-between items-center mt-2 pt-2 border-t border-gray-200 dark:border-slate-700">
+            <span className="text-sm font-black text-gray-900 dark:text-slate-100">ИТОГО:</span>
+            <span className="text-sm font-black text-green-600 dark:text-green-400">172 ₽</span>
+          </div>
+        </div>
+        
+        {/* Кнопки оплаты */}
+        <div className="flex gap-2 mt-3">
+          <button className="flex-1 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-bold transition-colors">
+            💵 Оплатить
+          </button>
+          <button className="flex-1 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition-colors">
+            ❌ Очистить чек
+          </button>
+        </div>
+      </div>
+      
+      {/* Правая колонка: История чеков */}
+      <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-xl p-4">
+        <div className="flex justify-between items-center mb-3">
+          <h4 className="text-xs font-black text-gray-700 dark:text-slate-300">
+            📋 История чеков
+          </h4>
+          <span className="text-[10px] text-gray-400">Сегодня: 12 чеков</span>
+        </div>
+        
+        <div className="space-y-2 max-h-[300px] overflow-y-auto">
+          <div className="bg-gray-50 dark:bg-slate-800 rounded-lg p-3">
+            <div className="flex justify-between items-start">
+              <div>
+                <span className="text-xs font-bold text-gray-900 dark:text-slate-100 block">Чек №0001</span>
+                <span className="text-[10px] text-gray-400">24.08.2026 14:32</span>
+                <span className="text-[10px] text-gray-400 block">3 товара</span>
+              </div>
+              <div className="text-right">
+                <span className="text-sm font-bold text-green-600 dark:text-green-400">172 ₽</span>
+                <div className="flex gap-1 mt-1">
+                  <button className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-[10px] font-bold hover:bg-blue-200 transition-colors">
+                    📄
+                  </button>
+                  <button className="px-2 py-1 bg-green-100 text-green-700 rounded text-[10px] font-bold hover:bg-green-200 transition-colors">
+                    ⬇️
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-gray-50 dark:bg-slate-800 rounded-lg p-3">
+            <div className="flex justify-between items-start">
+              <div>
+                <span className="text-xs font-bold text-gray-900 dark:text-slate-100 block">Чек №0002</span>
+                <span className="text-[10px] text-gray-400">24.08.2026 14:15</span>
+                <span className="text-[10px] text-gray-400 block">1 товар</span>
+              </div>
+              <div className="text-right">
+                <span className="text-sm font-bold text-green-600 dark:text-green-400">69 ₽</span>
+                <div className="flex gap-1 mt-1">
+                  <button className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-[10px] font-bold hover:bg-blue-200 transition-colors">
+                    📄
+                  </button>
+                  <button className="px-2 py-1 bg-green-100 text-green-700 rounded text-[10px] font-bold hover:bg-green-200 transition-colors">
+                    ⬇️
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-800">
+          <button className="w-full py-2 bg-gray-200 dark:bg-slate-800 hover:bg-gray-300 dark:hover:bg-slate-700 rounded-lg text-xs font-bold transition-colors">
+            📊 Скачать отчёт за смену (PDF)
+          </button>
+        </div>
+      </div>
+      
+    </div>
+  </div>
+)}
 
     </div>
   );
