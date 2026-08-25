@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Sun, ShieldAlert, KeyRound, User, Eye, EyeOff, LogIn } from 'lucide-react';
 import { getDBState } from '../data/databaseState';
@@ -14,7 +14,76 @@ export default function Login({ onLogin }: LoginProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
 
-  // Mapping role IDs from the DB state to strings expected by other components
+  // ==========================================================
+  // ЗАЩИТА ОТ БРУТФОРСА
+  // ==========================================================
+  const [loginAttempts, setLoginAttempts] = useState(() => {
+    const saved = localStorage.getItem('maria_ra_login_attempts');
+    return saved ? parseInt(saved) : 0;
+  });
+
+  const [blockedUntil, setBlockedUntil] = useState(() => {
+    const saved = localStorage.getItem('maria_ra_blocked_until');
+    return saved ? new Date(parseInt(saved)) : null;
+  });
+
+  const [timeLeft, setTimeLeft] = useState<number>(0);
+  const [isBlocked, setIsBlocked] = useState(false);
+
+  const MAX_ATTEMPTS = 5;
+  const BLOCK_DURATION = 5 * 60 * 1000;
+
+  useEffect(() => {
+    localStorage.setItem('maria_ra_login_attempts', String(loginAttempts));
+  }, [loginAttempts]);
+
+  useEffect(() => {
+    if (blockedUntil) {
+      localStorage.setItem('maria_ra_blocked_until', String(blockedUntil.getTime()));
+    }
+  }, [blockedUntil]);
+
+  useEffect(() => {
+    if (!blockedUntil) {
+      setIsBlocked(false);
+      return;
+    }
+
+    const now = new Date();
+    const diff = blockedUntil.getTime() - now.getTime();
+
+    if (diff <= 0) {
+      setIsBlocked(false);
+      setBlockedUntil(null);
+      setLoginAttempts(0);
+      localStorage.removeItem('maria_ra_blocked_until');
+      return;
+    }
+
+    setIsBlocked(true);
+    setTimeLeft(Math.ceil(diff / 1000));
+
+    const interval = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          setIsBlocked(false);
+          setBlockedUntil(null);
+          setLoginAttempts(0);
+          localStorage.removeItem('maria_ra_blocked_until');
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [blockedUntil]);
+
+  // ==========================================================
+  // ОСТАЛЬНЫЕ ФУНКЦИИ
+  // ==========================================================
+
   const roleMap: Record<string, string> = {
     'role_dir': 'Директор магазина',
     'role_acc': 'Старший бухгалтер',
@@ -33,7 +102,6 @@ export default function Login({ onLogin }: LoginProps) {
   const getSystemEmployees = () => {
     const dbState = getDBState();
     return dbState.employees.map((emp: any) => {
-      // Set a default username if not explicitly set
       let defaultUser = '';
       if (emp.id === '1') defaultUser = 'kopyl';
       else if (emp.id === '2') defaultUser = 'ivanova';
@@ -41,14 +109,13 @@ export default function Login({ onLogin }: LoginProps) {
       else if (emp.id === '4') defaultUser = 'vasiliev';
       else if (emp.id === '5') defaultUser = 'smirnov';
       else {
-        // Fallback for newly hired employees
         defaultUser = emp.name.toLowerCase().split(' ')[0] || 'employee';
       }
 
       return {
         ...emp,
         username: defaultUser,
-        password: '123' // default password for everyone
+        password: '123'
       };
     });
   };
@@ -57,6 +124,11 @@ export default function Login({ onLogin }: LoginProps) {
     e.preventDefault();
     setError('');
 
+    if (isBlocked) {
+      setError(`⚠️ Аккаунт заблокирован. Попробуйте через ${Math.ceil(timeLeft / 60)} минут ${timeLeft % 60} секунд.`);
+      return;
+    }
+
     if (!username.trim() || !password.trim()) {
       setError('Пожалуйста, заполните все поля!');
       return;
@@ -64,7 +136,6 @@ export default function Login({ onLogin }: LoginProps) {
 
     const systemEmps = getSystemEmployees();
     
-    // Find employee by username OR personnel number (case insensitive)
     const matchedEmp = systemEmps.find((emp: any) => {
       const isUsernameMatch = emp.username.toLowerCase() === username.trim().toLowerCase();
       const isPersNumMatch = emp.personnel_number.toLowerCase() === username.trim().toLowerCase();
@@ -72,16 +143,36 @@ export default function Login({ onLogin }: LoginProps) {
     });
 
     if (!matchedEmp) {
-      setError('Пользователь с таким логином или табельным номером не найден или деактивирован.');
+      const newAttempts = loginAttempts + 1;
+      setLoginAttempts(newAttempts);
+      
+      if (newAttempts >= MAX_ATTEMPTS) {
+        const blockUntil = new Date(Date.now() + BLOCK_DURATION);
+        setBlockedUntil(blockUntil);
+        setError(`⚠️ Превышено количество попыток! Доступ заблокирован на 5 минут.`);
+      } else {
+        setError(`Неверный логин или пароль. Осталось попыток: ${MAX_ATTEMPTS - newAttempts}`);
+      }
       return;
     }
 
     if (matchedEmp.password !== password) {
-      setError('Неверный пароль. Попробуйте еще раз или используйте подсказку.');
+      const newAttempts = loginAttempts + 1;
+      setLoginAttempts(newAttempts);
+      
+      if (newAttempts >= MAX_ATTEMPTS) {
+        const blockUntil = new Date(Date.now() + BLOCK_DURATION);
+        setBlockedUntil(blockUntil);
+        setError(`⚠️ Превышено количество попыток! Доступ заблокирован на 5 минут.`);
+      } else {
+        setError(`Неверный пароль. Осталось попыток: ${MAX_ATTEMPTS - newAttempts}`);
+      }
       return;
     }
 
-    // Convert matched DB employee to Employee type expected by UI
+    setLoginAttempts(0);
+    localStorage.removeItem('maria_ra_blocked_until');
+
     const uiEmp: Employee = {
       id: matchedEmp.id,
       name: matchedEmp.name,
@@ -106,7 +197,6 @@ export default function Login({ onLogin }: LoginProps) {
       
       <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-12 gap-8 items-center relative z-10">
         
-        {/* Left column: Brand Info */}
         <div className="md:col-span-5 text-center md:text-left space-y-6">
           <div className="flex flex-col items-center md:items-start space-y-3">
             <div className="relative flex items-center justify-center w-16 h-16 rounded-full bg-amber-400 text-white shadow-lg border-2 border-yellow-300">
@@ -142,7 +232,6 @@ export default function Login({ onLogin }: LoginProps) {
           </div>
         </div>
 
-        {/* Right column: Login form and Assistant */}
         <div className="md:col-span-7 space-y-6">
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
@@ -155,9 +244,30 @@ export default function Login({ onLogin }: LoginProps) {
             </h2>
 
             {error && (
-              <div className="mb-4 bg-red-50 dark:bg-red-950/20 border border-red-150 dark:border-red-900/30 text-red-700 dark:text-red-400 p-3 rounded-xl text-xs font-bold flex items-start space-x-2 animate-fade-in">
+              <div className={`mb-4 p-3 rounded-xl text-xs font-bold flex items-start space-x-2 animate-fade-in ${
+                isBlocked || error.includes('блокирован') || error.includes('превышено')
+                  ? 'bg-red-50 dark:bg-red-950/20 border border-red-150 dark:border-red-900/30 text-red-700 dark:text-red-400'
+                  : 'bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30 text-amber-700 dark:text-amber-400'
+              }`}>
                 <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
                 <span>{error}</span>
+              </div>
+            )}
+
+            {!isBlocked && loginAttempts > 0 && loginAttempts < MAX_ATTEMPTS && (
+              <div className="mb-4 text-xs text-amber-600 dark:text-amber-400 font-bold">
+                ⚠️ Осталось попыток: {MAX_ATTEMPTS - loginAttempts}
+              </div>
+            )}
+
+            {isBlocked && (
+              <div className="mb-4 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30 rounded-xl p-4 text-center">
+                <p className="text-sm text-red-700 dark:text-red-400 font-bold">
+                  🔒 Доступ заблокирован
+                </p>
+                <p className="text-xs text-red-600 dark:text-red-300 mt-1">
+                  Попробуйте через {Math.floor(timeLeft / 60)} мин {timeLeft % 60} сек
+                </p>
               </div>
             )}
 
@@ -175,7 +285,8 @@ export default function Login({ onLogin }: LoginProps) {
                     placeholder="Например, T-0421 или kopyl"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-xs font-bold text-gray-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-green-500/20 transition-all"
+                    disabled={isBlocked}
+                    className="w-full pl-9 pr-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-xs font-bold text-gray-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-green-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   />
                 </div>
               </div>
@@ -193,7 +304,8 @@ export default function Login({ onLogin }: LoginProps) {
                     placeholder="Пароль администратора"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-9 pr-10 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-xs font-bold text-gray-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-green-500/20 transition-all"
+                    disabled={isBlocked}
+                    className="w-full pl-9 pr-10 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-xs font-bold text-gray-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-green-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   />
                   <button
                     type="button"
@@ -207,15 +319,15 @@ export default function Login({ onLogin }: LoginProps) {
 
               <button
                 type="submit"
-                className="w-full py-2.5 bg-green-600 hover:bg-green-700 text-white font-black uppercase text-xs tracking-wider rounded-xl cursor-pointer transition-all active:scale-98 shadow-sm flex items-center justify-center space-x-2"
+                disabled={isBlocked}
+                className="w-full py-2.5 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 dark:disabled:bg-slate-700 text-white font-black uppercase text-xs tracking-wider rounded-xl cursor-pointer transition-all active:scale-98 shadow-sm flex items-center justify-center space-x-2 disabled:cursor-not-allowed"
               >
                 <LogIn className="w-4 h-4" />
-                <span>Войти в систему</span>
+                <span>{isBlocked ? 'ДОСТУП ЗАБЛОКИРОВАН' : 'Войти в систему'}</span>
               </button>
             </form>
           </motion.div>
 
-          {/* Assistant Panel */}
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -235,7 +347,8 @@ export default function Login({ onLogin }: LoginProps) {
                   key={emp.id}
                   onClick={() => handleQuickFill(emp)}
                   type="button"
-                  className="p-2.5 bg-white dark:bg-slate-900 border border-gray-150 dark:border-slate-850 hover:border-green-500/50 dark:hover:border-green-500/50 rounded-xl flex items-center justify-between text-left transition-all hover:shadow-2xs group cursor-pointer"
+                  disabled={isBlocked}
+                  className="p-2.5 bg-white dark:bg-slate-900 border border-gray-150 dark:border-slate-850 hover:border-green-500/50 dark:hover:border-green-500/50 rounded-xl flex items-center justify-between text-left transition-all hover:shadow-2xs group cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <div className="truncate pr-2">
                     <span className="text-[11px] font-black text-gray-850 dark:text-slate-100 block group-hover:text-green-600 dark:group-hover:text-green-400 transition-colors">
