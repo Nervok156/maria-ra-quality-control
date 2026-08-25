@@ -539,49 +539,60 @@ ${index + 1}. Чек №${receipt.receipt_number}
             </span>
           </div>
           
-          <div className="space-y-3 max-h-[350px] overflow-y-auto">
-            {!receipts || receipts.length === 0 ? (
-              <div className="text-center py-10 text-gray-400 text-sm">
-                Нет чеков за сегодня
-              </div>
-            ) : (
-              receipts.map((receipt) => (
-                <div
-                  key={receipt.id}
-                  className="bg-gray-50 dark:bg-slate-800 rounded-lg p-4 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
-                >
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <span className="text-sm font-bold text-gray-900 dark:text-slate-100 block">
-                        Чек №{receipt.receipt_number}
-                        {receipt.is_return && (
-                          <span className="ml-2 text-xs text-red-500 font-bold">(Возврат)</span>
-                        )}
-                      </span>
-                      <span className="text-xs text-gray-400">
-                        {new Date(receipt.created_at).toLocaleString('ru-RU')}
-                      </span>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-base font-bold text-green-600 dark:text-green-400">
-                        {receipt.total_amount?.toFixed(2) || '0.00'} ₽
-                      </span>
-                      <div className="flex gap-1 mt-1">
-                        <button
-                          onClick={() => handleDownloadReceipt(receipt)}
-                          className="px-3 py-1.5 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 rounded text-xs font-bold hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors flex items-center space-x-1"
-                          title="Скачать чек"
-                        >
-                          <Download className="w-4 h-4" />
-                          <span>Скачать</span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
+         <div className="space-y-3 max-h-[350px] overflow-y-auto">
+  {!receipts || receipts.length === 0 ? (
+    <div className="text-center py-10 text-gray-400 text-sm">
+      Нет чеков за сегодня
+    </div>
+  ) : (
+    receipts.map((receipt) => (
+      <div
+        key={receipt.id}
+        className="bg-gray-50 dark:bg-slate-800 rounded-lg p-4 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+      >
+        <div className="flex justify-between items-start">
+          <div className="flex-1 min-w-0">
+            <span className="text-sm font-bold text-gray-900 dark:text-slate-100 block">
+              Чек №{receipt.receipt_number}
+              {receipt.is_return && (
+                <span className="ml-2 text-xs text-red-500 font-bold">(Возврат)</span>
+              )}
+            </span>
+            <span className="text-xs text-gray-400">
+              {new Date(receipt.created_at).toLocaleString('ru-RU')}
+            </span>
+            {/* ✅ СПИСОК ТОВАРОВ В ЧЕКЕ */}
+            <div className="mt-2 space-y-0.5">
+              {(receipt.receipt_items || []).map((item: any, idx: number) => (
+                <div key={idx} className="text-xs text-gray-600 dark:text-gray-400 flex justify-between">
+                  <span className="truncate max-w-[200px]">
+                    {item.products?.name || 'Товар'} × {item.quantity}
+                  </span>
+                  <span className="font-medium">{item.total_price?.toFixed(2) || '0.00'} ₽</span>
                 </div>
-              ))
-            )}
+              ))}
+            </div>
           </div>
+          <div className="text-right shrink-0 ml-4">
+            <span className="text-base font-bold text-green-600 dark:text-green-400">
+              {receipt.total_amount?.toFixed(2) || '0.00'} ₽
+            </span>
+            <div className="flex gap-1 mt-1">
+              <button
+                onClick={() => handleDownloadReceipt(receipt)}
+                className="px-3 py-1.5 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 rounded text-xs font-bold hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors flex items-center space-x-1"
+                title="Скачать чек"
+              >
+                <Download className="w-4 h-4" />
+                <span>Скачать</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    ))
+  )}
+</div>
           
           <div className="mt-4 pt-4 border-t border-gray-100 dark:border-slate-800">
             <button
