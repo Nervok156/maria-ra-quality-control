@@ -80,7 +80,8 @@ const calculateStatusAndPercent = (expiryDateStr: string, manufactureDateStr?: s
     quantity: 1,
     expirationDate: '',
     manufactureDate: '',
-    location: 'shelf_1'
+    location: 'shelf_1',
+    isUnlimited: false
   });
 
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -139,7 +140,8 @@ const calculateStatusAndPercent = (expiryDateStr: string, manufactureDateStr?: s
         quantity: 1,
         expirationDate: '',
         manufactureDate: '',
-        location: 'shelf_1'
+        location: 'shelf_1',
+  isUnlimited: false 
       });
       return;
     }
@@ -161,7 +163,8 @@ const calculateStatusAndPercent = (expiryDateStr: string, manufactureDateStr?: s
       quantity: Math.floor(Math.random() * 10) + 1,
       manufactureDate: format(mDate),
       expirationDate: format(eDate),
-      location: 'shelf_1'
+      location: 'shelf_1',
+  isUnlimited: false 
     });
   };
 
@@ -171,20 +174,14 @@ const calculateStatusAndPercent = (expiryDateStr: string, manufactureDateStr?: s
   const handleCreateProduct = async (e: React.FormEvent) => {
   e.preventDefault();
   
-  console.log('📝 Начинаем добавление товара...');
-  console.log('📦 Данные из формы:', {
-    name: newProduct.name,
-    barcode: newProduct.barcode,
-    manufactureDate: newProduct.manufactureDate,
-    expirationDate: newProduct.expirationDate,
-    price: newProduct.price,
-    quantity: newProduct.quantity,
-    category: newProduct.category,
-    location: newProduct.location
-  });
+  // ✅ Для бессрочных товаров не проверяем срок годности
+  if (!newProduct.isUnlimited && !newProduct.expirationDate) {
+    alert("Пожалуйста, заполните поле 'Срок годности' или отметьте товар как бессрочный!");
+    return;
+  }
   
-  if (!newProduct.name || !newProduct.barcode || !newProduct.expirationDate) {
-    alert("Пожалуйста, заполните основные поля: Название, Штрихкод и Срок годности!");
+  if (!newProduct.name || !newProduct.barcode) {
+    alert("Пожалуйста, заполните основные поля: Название и Штрихкод!");
     return;
   }
 
@@ -206,38 +203,35 @@ const calculateStatusAndPercent = (expiryDateStr: string, manufactureDateStr?: s
 
     if (existingProducts && existingProducts.length > 0) {
       productId = existingProducts[0].id;
-      console.log('✅ Товар уже существует, ID:', productId);
       alert(`Товар "${existingProducts[0].name}" уже есть в базе. Добавляем новую партию.`);
     } else {
-      console.log('🆕 Создаём новый товар...');
       const product = await createProduct({
         barcode: trimmedBarcode,
         name: newProduct.name,
         category_id: newProduct.category,
         base_price: Number(newProduct.price),
-        shelf_life_days: 7
+        shelf_life_days: newProduct.isUnlimited ? 99999 : 7
       });
       
       if (!product || !product.id) {
         throw new Error('Не удалось создать товар');
       }
       productId = product.id;
-      console.log('✅ Создан товар с ID:', productId);
     }
 
-    // Создаём партию
-    const batchData = {
+    // ✅ Для бессрочных товаров устанавливаем срок на 100 лет вперёд
+    const expirationDate = newProduct.isUnlimited 
+      ? new Date(Date.now() + 100 * 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+      : newProduct.expirationDate;
+
+    await createBatch({
       product_id: productId,
       store_id: 'store_1',
       quantity: Number(newProduct.quantity),
       manufacture_date: newProduct.manufactureDate || new Date().toISOString().split('T')[0],
-      expiration_date: newProduct.expirationDate,
+      expiration_date: expirationDate,
       location_id: newProduct.location || 'shelf_1'
-    };
-    
-    console.log('📦 Создаём партию с данными:', batchData);
-    
-    await createBatch(batchData);
+    });
 
     await onDataChange();
     
@@ -250,10 +244,9 @@ const calculateStatusAndPercent = (expiryDateStr: string, manufactureDateStr?: s
       quantity: 1,
       expirationDate: '',
       manufactureDate: '',
-      location: 'shelf_1'
+      location: 'shelf_1',
+      isUnlimited: false
     });
-    
-    console.log('✅ Товар успешно добавлен!');
     
   } catch (error) {
     console.error('❌ Ошибка при создании товара:', error);
@@ -1269,26 +1262,50 @@ if (product.status === 'long_term') {
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] font-extrabold text-gray-600 dark:text-slate-400 uppercase mb-1">Дата изготовления</label>
-                  <input 
-                    type="date"
-                    value={newProduct.manufactureDate}
-                    onChange={(e) => setNewProduct({ ...newProduct, manufactureDate: e.target.value })}
-                    className="w-full bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-900 focus:border-green-500 rounded-lg px-3 py-1.5 text-xs font-semibold focus:outline-none transition-colors duration-200"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-extrabold text-gray-600 dark:text-slate-400 uppercase mb-1">Годен до (Срок годности)</label>
-                  <input 
-                    type="date"
-                    required
-                    value={newProduct.expirationDate}
-                    onChange={(e) => setNewProduct({ ...newProduct, expirationDate: e.target.value })}
-                    className="w-full bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-900 focus:border-green-500 rounded-lg px-3 py-1.5 text-xs font-semibold focus:outline-none transition-colors duration-200"
-                  />
-                </div>
-              </div>
+  <div>
+    <label className="block text-[10px] font-extrabold text-gray-600 dark:text-slate-400 uppercase mb-1">Дата изготовления</label>
+    <input 
+      type="date"
+      value={newProduct.manufactureDate}
+      onChange={(e) => setNewProduct({ ...newProduct, manufactureDate: e.target.value })}
+      disabled={newProduct.isUnlimited}
+      className="w-full bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-900 focus:border-green-500 rounded-lg px-3 py-1.5 text-xs font-semibold focus:outline-none transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+    />
+  </div>
+  <div>
+    <label className="block text-[10px] font-extrabold text-gray-600 dark:text-slate-400 uppercase mb-1">Годен до (Срок годности)</label>
+    <input 
+      type="date"
+      required={!newProduct.isUnlimited}
+      value={newProduct.expirationDate}
+      onChange={(e) => setNewProduct({ ...newProduct, expirationDate: e.target.value })}
+      disabled={newProduct.isUnlimited}
+      className="w-full bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-900 focus:border-green-500 rounded-lg px-3 py-1.5 text-xs font-semibold focus:outline-none transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+    />
+  </div>
+</div>
+
+{/* ✅ ЧЕКБОКС "БЕССРОЧНЫЙ ТОВАР" */}
+<div className="flex items-center space-x-3 p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg border border-gray-100 dark:border-slate-700">
+  <input
+    type="checkbox"
+    id="unlimited-checkbox"
+    checked={newProduct.isUnlimited}
+    onChange={(e) => {
+      const isChecked = e.target.checked;
+      setNewProduct({ 
+        ...newProduct, 
+        isUnlimited: isChecked,
+        expirationDate: isChecked ? '' : newProduct.expirationDate,
+        manufactureDate: isChecked ? '' : newProduct.manufactureDate
+      });
+    }}
+    className="w-4 h-4 text-green-600 focus:ring-green-500 border-gray-300 rounded cursor-pointer"
+  />
+  <label htmlFor="unlimited-checkbox" className="text-xs font-bold text-gray-700 dark:text-slate-300 cursor-pointer select-none">
+    ♾️ Бессрочный товар (срок годности не ограничен)
+  </label>
+</div>
 
               <div className="flex justify-end space-x-2 pt-4 border-t border-gray-100 dark:border-slate-800">
                 <button
