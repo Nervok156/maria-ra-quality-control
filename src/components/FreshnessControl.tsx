@@ -42,16 +42,18 @@ const calculateStatusAndPercent = (expiryDateStr: string, manufactureDateStr?: s
   
   const diffTime = expiry.getTime() - today.getTime();
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    if (diffDays <= 0) {
-      return { status: 'expired' as const, percent: 0, daysRemaining: diffDays };
-    }
-     // 📌 НОВАЯ ЛОГИКА: Если срок > 30 дней — это товар длительного хранения
-  if (diffDays > 30) {
+  
+  if (diffDays <= 0) {
+    return { status: 'expired' as const, percent: 0, daysRemaining: diffDays };
+  }
+  
+  // ✅ Проверяем на бессрочный (≈100 лет)
+  const isUnlimited = diffDays > 36500;
+  if (isUnlimited) {
     return {
       status: 'long_term' as const,
       percent: 100,
-      daysRemaining: diffDays
+      daysRemaining: 0
     };
   }
     let totalLife = 10;
