@@ -548,20 +548,19 @@ export async function getActiveProducts() {
       const diffDays = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
       
       // ✅ Правильная логика статусов
-      let status: 'fresh' | 'expired' | 'expiring_soon' | 'marked_down' | 'written_off' | 'long_term' = 'fresh';
-      
-      // Проверяем на бессрочный (срок ≈ 100 лет = 36500 дней)
-      const isUnlimited = diffDays > 36500;
-      
-      if (diffDays <= 0) {
-        status = 'expired';
-      } else if (isUnlimited) {
-        status = 'long_term';
-      } else if (diffDays <= 2) {
-        status = 'expiring_soon';
-      } else {
-        status = 'fresh';
-      }
+     const isUnlimited = diffDays > 36500;
+
+let status: 'fresh' | 'expired' | 'expiring_soon' | 'marked_down' | 'written_off' | 'long_term' = 'fresh';
+
+if (diffDays <= 0) {
+  status = 'expired';
+} else if (isUnlimited) {
+  status = 'long_term';
+} else if (diffDays <= 2) {
+  status = 'expiring_soon';
+} else {
+  status = 'fresh';  // ✅ Все остальные — свежие
+}
       
       if (markdown) status = 'marked_down';
       if (batch.is_written_off) status = 'written_off';
