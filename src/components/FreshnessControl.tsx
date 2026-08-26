@@ -174,6 +174,13 @@ const calculateStatusAndPercent = (expiryDateStr: string, manufactureDateStr?: s
   const handleCreateProduct = async (e: React.FormEvent) => {
   e.preventDefault();
   
+  // ✅ Проверка: скоропортящиеся товары не могут быть бессрочными
+  const perishableCategories = ['dairy', 'bakery', 'meat_sausage', 'confectionery'];
+  if (newProduct.isUnlimited && perishableCategories.includes(newProduct.category)) {
+    alert('⚠️ Для скоропортящихся товаров (молочные, хлеб, мясо, кондитерские) обязательно указывать срок годности!');
+    return;
+  }
+  
   // ✅ Для бессрочных товаров не проверяем срок годности
   if (!newProduct.isUnlimited && !newProduct.expirationDate) {
     alert("Пожалуйста, заполните поле 'Срок годности' или отметьте товар как бессрочный!");
@@ -1286,26 +1293,40 @@ if (product.status === 'long_term') {
 </div>
 
 {/* ✅ ЧЕКБОКС "БЕССРОЧНЫЙ ТОВАР" */}
-<div className="flex items-center space-x-3 p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg border border-gray-100 dark:border-slate-700">
-  <input
-    type="checkbox"
-    id="unlimited-checkbox"
-    checked={newProduct.isUnlimited}
-    onChange={(e) => {
-      const isChecked = e.target.checked;
-      setNewProduct({ 
-        ...newProduct, 
-        isUnlimited: isChecked,
-        expirationDate: isChecked ? '' : newProduct.expirationDate,
-        manufactureDate: isChecked ? '' : newProduct.manufactureDate
-      });
-    }}
-    className="w-4 h-4 text-green-600 focus:ring-green-500 border-gray-300 rounded cursor-pointer"
-  />
-  <label htmlFor="unlimited-checkbox" className="text-xs font-bold text-gray-700 dark:text-slate-300 cursor-pointer select-none">
-    ♾️ Бессрочный товар (срок годности не ограничен)
-  </label>
-</div>
+{/* ✅ ЧЕКБОКС "БЕССРОЧНЫЙ ТОВАР" — только для нескоропортящихся категорий */}
+{/* Скоропортящиеся категории: dairy, bakery, meat_sausage, confectionery */}
+{!['dairy', 'bakery', 'meat_sausage', 'confectionery'].includes(newProduct.category) && (
+  <div className="flex items-center space-x-3 p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg border border-gray-100 dark:border-slate-700">
+    <input
+      type="checkbox"
+      id="unlimited-checkbox"
+      checked={newProduct.isUnlimited}
+      onChange={(e) => {
+        const isChecked = e.target.checked;
+        setNewProduct({ 
+          ...newProduct, 
+          isUnlimited: isChecked,
+          expirationDate: isChecked ? '' : newProduct.expirationDate,
+          manufactureDate: isChecked ? '' : newProduct.manufactureDate
+        });
+      }}
+      className="w-4 h-4 text-green-600 focus:ring-green-500 border-gray-300 rounded cursor-pointer"
+    />
+    <label htmlFor="unlimited-checkbox" className="text-xs font-bold text-gray-700 dark:text-slate-300 cursor-pointer select-none">
+      ♾️ Бессрочный товар (срок годности не ограничен)
+    </label>
+  </div>
+)}
+
+{/* ✅ Если категория скоропортящаяся, показываем предупреждение */}
+{['dairy', 'bakery', 'meat_sausage', 'confectionery'].includes(newProduct.category) && (
+  <div className="flex items-center space-x-3 p-3 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-900/30">
+    <span className="text-amber-500 text-lg">⚠️</span>
+    <span className="text-xs text-amber-700 dark:text-amber-300 font-medium">
+      Для скоропортящихся товаров обязательно укажите срок годности
+    </span>
+  </div>
+)}
 
               <div className="flex justify-end space-x-2 pt-4 border-t border-gray-100 dark:border-slate-800">
                 <button
