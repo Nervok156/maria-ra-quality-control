@@ -687,20 +687,22 @@ if (product.status === 'long_term') {
                           </span>
                         </td>
                         <td className="px-4 py-4">
-                          {isWrittenOff ? (
-                            <span className="text-red-500 dark:text-red-400 font-mono text-[10px] font-bold">Снято с полки</span>
-                          ) : (
-                            <div className="w-28">
-                              <div className="flex justify-between items-center mb-1 text-[10px] font-mono text-gray-400 dark:text-slate-500">
-                                <span>Ресурс:</span>
-                                <span className="font-bold text-gray-700 dark:text-slate-300">{percent}%</span>
-                              </div>
-                              <div className="w-full bg-gray-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                                <div className={`h-full ${getProgressColor(percent)} rounded-full`} style={{ width: `${percent}%` }}></div>
-                              </div>
-                            </div>
-                          )}
-                        </td>
+  {isWrittenOff ? (
+    <span className="text-red-500 dark:text-red-400 font-mono text-[10px] font-bold">Снято с полки</span>
+  ) : product.status === 'long_term' ? (
+    <span className="text-purple-500 dark:text-purple-400 font-mono text-[10px] font-bold">♾️ Бессрочный</span>
+  ) : (
+    <div className="w-28">
+      <div className="flex justify-between items-center mb-1 text-[10px] font-mono text-gray-400 dark:text-slate-500">
+        <span>Ресурс:</span>
+        <span className="font-bold text-gray-700 dark:text-slate-300">{percent}%</span>
+      </div>
+      <div className="w-full bg-gray-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
+        <div className={`h-full ${getProgressColor(percent)} rounded-full`} style={{ width: `${percent}%` }}></div>
+      </div>
+    </div>
+  )}
+</td>
                         <td className="px-4 py-4 text-center font-bold text-gray-800 dark:text-slate-200">
                           {product.quantity} шт.
                         </td>
@@ -1275,21 +1277,29 @@ if (product.status === 'long_term') {
       type="date"
       value={newProduct.manufactureDate}
       onChange={(e) => setNewProduct({ ...newProduct, manufactureDate: e.target.value })}
-      disabled={newProduct.isUnlimited}
-      className="w-full bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-900 focus:border-green-500 rounded-lg px-3 py-1.5 text-xs font-semibold focus:outline-none transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+      className="w-full bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-900 focus:border-green-500 rounded-lg px-3 py-1.5 text-xs font-semibold focus:outline-none transition-colors duration-200"
     />
   </div>
-  <div>
-    <label className="block text-[10px] font-extrabold text-gray-600 dark:text-slate-400 uppercase mb-1">Годен до (Срок годности)</label>
-    <input 
-      type="date"
-      required={!newProduct.isUnlimited}
-      value={newProduct.expirationDate}
-      onChange={(e) => setNewProduct({ ...newProduct, expirationDate: e.target.value })}
-      disabled={newProduct.isUnlimited}
-      className="w-full bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-900 focus:border-green-500 rounded-lg px-3 py-1.5 text-xs font-semibold focus:outline-none transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-    />
-  </div>
+  
+  {!newProduct.isUnlimited ? (
+    <div>
+      <label className="block text-[10px] font-extrabold text-gray-600 dark:text-slate-400 uppercase mb-1">Годен до (Срок годности)</label>
+      <input 
+        type="date"
+        required
+        value={newProduct.expirationDate}
+        onChange={(e) => setNewProduct({ ...newProduct, expirationDate: e.target.value })}
+        className="w-full bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-900 focus:border-green-500 rounded-lg px-3 py-1.5 text-xs font-semibold focus:outline-none transition-colors duration-200"
+      />
+    </div>
+  ) : (
+    <div>
+      <label className="block text-[10px] font-extrabold text-gray-600 dark:text-slate-400 uppercase mb-1">Срок годности</label>
+      <div className="w-full bg-gray-100 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs font-semibold text-gray-500 dark:text-slate-400 flex items-center">
+        <span>♾️ Бессрочный</span>
+      </div>
+    </div>
+  )}
 </div>
 
 {/* ✅ ЧЕКБОКС "БЕССРОЧНЫЙ ТОВАР" */}

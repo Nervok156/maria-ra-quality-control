@@ -251,22 +251,27 @@ const getDaysRemaining = (expiryDateStr: string) => {
                               <span className="w-2 h-2 rounded-full bg-red-500"></span>
                             </div>
                             
-                            {adviceList.some(a => a.shelfRow.includes('ПЕРВЫЙ РЯД')) ? (
-                              <div className="space-y-2">
-                                {adviceList.filter(a => a.shelfRow.includes('ПЕРВЫЙ РЯД')).map(item => (
-                                  <div key={item.batch.id} className="bg-red-50/50 dark:bg-red-950/10 border border-red-100 dark:border-red-900/30 p-2 rounded-lg">
-                                    <div className="flex justify-between text-[11px] font-bold">
-                                      <span className="text-gray-900 dark:text-slate-100">Партия #{item.batch.id.slice(-3)}</span>
-                                      <span className="text-red-600 dark:text-red-400">Ост. {item.daysRemaining} дн.</span>
-                                    </div>
-                                    <p className="text-[10px] text-gray-500 mt-1 font-semibold">{item.batch.quantity} шт. | Срок: {item.batch.expirationDate.split('-').reverse().join('.')}</p>
-                                  </div>
-                                ))}
-                                <p className="text-[9px] text-gray-400 leading-tight italic mt-1 font-medium">{adviceList.find(a => a.shelfRow.includes('ПЕРВЫЙ'))?.textAction}</p>
-                              </div>
-                            ) : (
-                              <p className="text-[10px] text-gray-400 dark:text-slate-500 italic text-center my-auto font-medium">Нет партий для переднего края полки</p>
-                            )}
+                          {adviceList.some(a => a.shelfRow.includes('ПЕРВЫЙ РЯД')) ? (
+  <div className="space-y-2">
+    {adviceList.filter(a => a.shelfRow.includes('ПЕРВЫЙ РЯД')).map(item => (
+      <div key={item.batch.id} className="bg-red-50/50 dark:bg-red-950/10 border border-red-100 dark:border-red-900/30 p-2 rounded-lg">
+        <div className="flex justify-between text-[11px] font-bold">
+          <span className="text-gray-900 dark:text-slate-100">Партия #{item.batch.id.slice(-3)}</span>
+          {/* ✅ Для бессрочных товаров не показываем дни */}
+          {item.batch.status === 'long_term' ? (
+            <span className="text-purple-500 dark:text-purple-400">♾️ Бессрочный</span>
+          ) : (
+            <span className="text-red-600 dark:text-red-400">Ост. {item.daysRemaining} дн.</span>
+          )}
+        </div>
+        <p className="text-[10px] text-gray-500 mt-1 font-semibold">{item.batch.quantity} шт. | Срок: {item.batch.expirationDate.split('-').reverse().join('.')}</p>
+      </div>
+    ))}
+    <p className="text-[9px] text-gray-400 leading-tight italic mt-1 font-medium">{adviceList.find(a => a.shelfRow.includes('ПЕРВЫЙ'))?.textAction}</p>
+  </div>
+) : (
+  <p className="text-[10px] text-gray-400 dark:text-slate-500 italic text-center my-auto font-medium">Нет партий для переднего края полки</p>
+)}
                           </div>
 
                           {/* Middle Slot (Row 2) */}
