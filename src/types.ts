@@ -17,12 +17,13 @@ export interface Product {
   quantity: number;
   expirationDate: string;
   manufactureDate?: string;
-  status: 'fresh' | 'expiring_soon' | 'expired' | 'marked_down' | 'written_off';
+  status: 'fresh' | 'expiring_soon' | 'expired' | 'marked_down' | 'written_off' | 'long_term';
   markdownPrice?: number;
   markdownPercent?: number;
   writeOffReason?: string;
   location?: string;
   addedAt: string;
+  daysRemaining?: number;
 }
 
 export interface Inspection {

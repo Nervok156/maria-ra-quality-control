@@ -46,23 +46,30 @@ const calculateStatusAndPercent = (expiryDateStr: string, manufactureDateStr?: s
     if (diffDays <= 0) {
       return { status: 'expired' as const, percent: 0, daysRemaining: diffDays };
     }
-    
-    let totalLife = 10;
-    if (manufactureDateStr) {
-      const manufacture = new Date(manufactureDateStr);
-      manufacture.setHours(0, 0, 0, 0);
-      totalLife = Math.max(1, Math.ceil((expiry.getTime() - manufacture.getTime()) / (1000 * 60 * 60 * 24)));
-    }
-    
-    const percent = Math.min(100, Math.max(0, Math.round((diffDays / totalLife) * 100)));
-    const expiringSoon = diffDays <= 2 || percent <= 25;
-    
+     // 📌 НОВАЯ ЛОГИКА: Если срок > 30 дней — это товар длительного хранения
+  if (diffDays > 30) {
     return {
-      status: expiringSoon ? ('expiring_soon' as const) : ('fresh' as const),
-      percent,
+      status: 'long_term' as const,
+      percent: 100,
       daysRemaining: diffDays
     };
+  }
+    let totalLife = 10;
+  if (manufactureDateStr) {
+    const manufacture = new Date(manufactureDateStr);
+    manufacture.setHours(0, 0, 0, 0);
+    totalLife = Math.max(1, Math.ceil((expiry.getTime() - manufacture.getTime()) / (1000 * 60 * 60 * 24)));
+  }
+  
+  const percent = Math.min(100, Math.max(0, Math.round((diffDays / totalLife) * 100)));
+  const expiringSoon = diffDays <= 2 || percent <= 25;
+  
+  return {
+    status: expiringSoon ? ('expiring_soon' as const) : ('fresh' as const),
+    percent,
+    daysRemaining: diffDays
   };
+};
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [newProduct, setNewProduct] = useState({
@@ -404,7 +411,14 @@ const calculateStatusAndPercent = (expiryDateStr: string, manufactureDateStr?: s
         </span>
       );
     }
-
+if (product.status === 'long_term') {
+    return (
+      <span className="bg-purple-100 dark:bg-purple-950/40 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-900/30 px-2.5 py-1 rounded-md text-[10px] font-extrabold flex items-center w-fit space-x-1">
+        <span>📦 Длительное хранение</span>
+        <span className="text-[9px] font-normal opacity-70">({product.daysRemaining} дн.)</span>
+      </span>
+    );
+  }
     const { status, daysRemaining } = calculateStatusAndPercent(product.expirationDate, product.manufactureDate);
 
     if (status === 'expired') {
@@ -609,6 +623,7 @@ const calculateStatusAndPercent = (expiryDateStr: string, manufactureDateStr?: s
                 <option value="expired">Просроченные</option>
                 <option value="marked_down">Уцененные</option>
                 <option value="written_off">Списанные</option>
+                  <option value="long_term">📦 Длительное хранение</option>
               </select>
 
               <button
