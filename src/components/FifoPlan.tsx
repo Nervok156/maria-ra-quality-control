@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { 
-  RefreshCw, Info, CheckSquare, Search, Filter, HelpCircle, 
+import {
+  RefreshCw, Info, CheckSquare, Search, Filter, HelpCircle,
   ArrowRight, Sparkles, BookOpen, Layers, CheckCircle2, UserCheck
 } from 'lucide-react';
 import { Product, ProductCategory, Employee } from '../types';
@@ -17,25 +17,25 @@ export default function FifoPlan({ products, currentUser }: FifoPlanProps) {
   const [rotationLogged, setRotationLogged] = useState<string | null>(null);
   const [checkedSteps, setCheckedSteps] = useState<Record<number, boolean>>({});
 
-const simulatedToday = new Date().toISOString().split('T')[0];
+  const simulatedToday = new Date().toISOString().split('T')[0];
 
   // Используем реальную текущую дату
-const getDaysRemaining = (expiryDateStr: string) => {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const expiry = new Date(expiryDateStr);
-  expiry.setHours(0, 0, 0, 0);
-  const diffTime = expiry.getTime() - today.getTime();
-  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-};
+  const getDaysRemaining = (expiryDateStr: string) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const expiry = new Date(expiryDateStr);
+    expiry.setHours(0, 0, 0, 0);
+    const diffTime = expiry.getTime() - today.getTime();
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  };
 
   // Group active, non-written-off products by name to find different batches
   const activeProducts = products.filter(p => p.status !== 'written_off');
 
   // Filter products based on search & category
   const filteredProducts = activeProducts.filter(p => {
-    const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          p.barcode.includes(searchTerm);
+    const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      p.barcode.includes(searchTerm);
     const matchesCategory = selectedCategory === 'all' || p.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
@@ -66,8 +66,8 @@ const getDaysRemaining = (expiryDateStr: string) => {
         shelfRow = 'ПЕРВЫЙ РЯД (Фронт)';
         priority = 'ВЫСОКИЙ (Продажа сегодня)';
         actionClass = 'bg-amber-100 dark:bg-amber-950/40 text-amber-900 dark:text-amber-300 border-amber-300';
-        textAction = batch.status === 'marked_down' 
-          ? `Выставить в первый ряд с зеленой наклейкой уценки (${batch.markdownPrice} ₽).` 
+        textAction = batch.status === 'marked_down'
+          ? `Выставить в первый ряд с зеленой наклейкой уценки (${batch.markdownPrice} ₽).`
           : 'Сделать уценку -30%/-50% и выставить в первый ряд на уровне глаз покупателя.';
       } else if (days <= 5) {
         shelfRow = 'ВТОРОЙ РЯД (Середина)';
@@ -120,7 +120,7 @@ const getDaysRemaining = (expiryDateStr: string) => {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      
+
       {/* Intro Banner */}
       <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-2xl p-6 shadow-xs transition-colors">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
@@ -152,8 +152,8 @@ const getDaysRemaining = (expiryDateStr: string) => {
       <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-xl p-4 shadow-2xs flex flex-wrap gap-3 items-center justify-between no-print transition-colors">
         <div className="flex flex-1 min-w-[280px] items-center space-x-2 bg-gray-50 dark:bg-slate-800/50 border border-gray-150 dark:border-slate-800 rounded-lg px-3 py-2">
           <Search className="w-4 h-4 text-gray-400" />
-          <input 
-            type="text" 
+          <input
+            type="text"
             placeholder="Поиск товара по названию или штрихкоду для ротации..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -164,11 +164,10 @@ const getDaysRemaining = (expiryDateStr: string) => {
         <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setSelectedCategory('all')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-              selectedCategory === 'all'
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${selectedCategory === 'all'
                 ? 'bg-green-600 text-white shadow-xs'
                 : 'bg-gray-50 dark:bg-slate-850 hover:bg-gray-100 text-gray-600 dark:text-slate-300 border border-gray-150 dark:border-slate-800'
-            }`}
+              }`}
           >
             Все отделы
           </button>
@@ -176,11 +175,10 @@ const getDaysRemaining = (expiryDateStr: string) => {
             <button
               key={cat}
               onClick={() => setSelectedCategory(cat as ProductCategory)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                selectedCategory === cat
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${selectedCategory === cat
                   ? 'bg-green-600 text-white shadow-xs'
                   : 'bg-gray-50 dark:bg-slate-850 hover:bg-gray-100 text-gray-600 dark:text-slate-300 border border-gray-150 dark:border-slate-800'
-              }`}
+                }`}
             >
               {categoryLabels[cat as ProductCategory]}
             </button>
@@ -190,10 +188,10 @@ const getDaysRemaining = (expiryDateStr: string) => {
 
       {/* Main Rotation Plans & Instructions Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
+
         {/* Left column: Shelf Placement Schemas (Take up 2/3 space on large screens) */}
         <div className="lg:col-span-2 space-y-6">
-          
+
           <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-xl p-5 shadow-2xs transition-colors">
             <div className="flex justify-between items-center mb-4 border-b border-gray-50 dark:border-slate-800 pb-3">
               <div className="flex items-center space-x-2">
@@ -218,7 +216,7 @@ const getDaysRemaining = (expiryDateStr: string) => {
 
                   return (
                     <div key={prodName} className="border border-gray-100 dark:border-slate-800 rounded-xl p-4 bg-gray-50/30 dark:bg-slate-900/50 transition-colors">
-                      
+
                       {/* Product Header inside plan */}
                       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-4">
                         <div>
@@ -250,28 +248,34 @@ const getDaysRemaining = (expiryDateStr: string) => {
                               <span className="text-[9px] font-black text-red-700 dark:text-red-400 uppercase">ПЕРВЫЙ РЯД (ФРОНТ)</span>
                               <span className="w-2 h-2 rounded-full bg-red-500"></span>
                             </div>
-                            
-                          {adviceList.some(a => a.shelfRow.includes('ПЕРВЫЙ РЯД')) ? (
-  <div className="space-y-2">
-    {adviceList.filter(a => a.shelfRow.includes('ПЕРВЫЙ РЯД')).map(item => (
-      <div key={item.batch.id} className="bg-red-50/50 dark:bg-red-950/10 border border-red-100 dark:border-red-900/30 p-2 rounded-lg">
-        <div className="flex justify-between text-[11px] font-bold">
-          <span className="text-gray-900 dark:text-slate-100">Партия #{item.batch.id.slice(-3)}</span>
-          {/* ✅ Для бессрочных товаров не показываем дни */}
-          {item.batch.status === 'long_term' ? (
-            <span className="text-purple-500 dark:text-purple-400">♾️ Бессрочный</span>
-          ) : (
-            <span className="text-red-600 dark:text-red-400">Ост. {item.daysRemaining} дн.</span>
-          )}
-        </div>
-        <p className="text-[10px] text-gray-500 mt-1 font-semibold">{item.batch.quantity} шт. | Срок: {item.batch.expirationDate.split('-').reverse().join('.')}</p>
-      </div>
-    ))}
-    <p className="text-[9px] text-gray-400 leading-tight italic mt-1 font-medium">{adviceList.find(a => a.shelfRow.includes('ПЕРВЫЙ'))?.textAction}</p>
+
+                            {adviceList.some(a => a.shelfRow.includes('ПЕРВЫЙ РЯД')) ? (
+                              <div className="space-y-2">
+                                {adviceList.filter(a => a.shelfRow.includes('ПЕРВЫЙ РЯД')).map(item => (
+  <div key={item.batch.id} className="bg-red-50/50 dark:bg-red-950/10 border border-red-100 dark:border-red-900/30 p-2 rounded-lg">
+    <div className="flex justify-between text-[11px] font-bold">
+      <span className="text-gray-900 dark:text-slate-100">Партия #{item.batch.id.slice(-3)}</span>
+      {item.batch.status === 'long_term' ? (
+        <span className="text-purple-500 dark:text-purple-400">♾️ Бессрочный</span>
+      ) : (
+        <span className="text-red-600 dark:text-red-400">Ост. {item.daysRemaining} дн.</span>
+      )}
+    </div>
+    <p className="text-[10px] text-gray-500 mt-1 font-semibold">
+      {item.batch.quantity} шт.
+      {item.batch.status === 'long_term' ? (
+        <span className="text-purple-500"> | ♾️ Бессрочный</span>
+      ) : (
+        <span> | Срок: {item.batch.expirationDate.split('-').reverse().join('.')}</span>
+      )}
+    </p>
   </div>
-) : (
-  <p className="text-[10px] text-gray-400 dark:text-slate-500 italic text-center my-auto font-medium">Нет партий для переднего края полки</p>
-)}
+))}
+                                <p className="text-[9px] text-gray-400 leading-tight italic mt-1 font-medium">{adviceList.find(a => a.shelfRow.includes('ПЕРВЫЙ'))?.textAction}</p>
+                              </div>
+                            ) : (
+                              <p className="text-[10px] text-gray-400 dark:text-slate-500 italic text-center my-auto font-medium">Нет партий для переднего края полки</p>
+                            )}
                           </div>
 
                           {/* Middle Slot (Row 2) */}
@@ -289,7 +293,14 @@ const getDaysRemaining = (expiryDateStr: string) => {
                                       <span className="text-gray-900 dark:text-slate-100">Партия #{item.batch.id.slice(-3)}</span>
                                       <span className="text-blue-600 dark:text-blue-400">Ост. {item.daysRemaining} дн.</span>
                                     </div>
-                                    <p className="text-[10px] text-gray-500 mt-1 font-semibold">{item.batch.quantity} шт. | Срок: {item.batch.expirationDate.split('-').reverse().join('.')}</p>
+                                    <p className="text-[10px] text-gray-500 mt-1 font-semibold">
+                                      {item.batch.quantity} шт.
+                                      {item.batch.status === 'long_term' ? (
+                                        <span className="text-purple-500"> | ♾️ Бессрочный</span>
+                                      ) : (
+                                        <span> | Срок: {item.batch.expirationDate.split('-').reverse().join('.')}</span>
+                                      )}
+                                    </p>
                                   </div>
                                 ))}
                                 <p className="text-[9px] text-gray-400 leading-tight italic mt-1 font-medium">Разместить строго за товарами первого ряда.</p>
@@ -326,28 +337,28 @@ const getDaysRemaining = (expiryDateStr: string) => {
                         </div>
                         {/* Expired / Alerts warnings if any */}
                         {(() => {
-  const expiredItems = adviceList.filter(a => {
-    return a.batch.status === 'expired' && a.shelfRow.includes('ИЗЪЯТЬ');
-  });
-  
-  const totalExpired = expiredItems.reduce((acc, i) => acc + i.batch.quantity, 0);
-  
-  if (expiredItems.length === 0 || totalExpired === 0) {
-    return null;
-  }
-  
-  return (
-    <div className="mt-3 bg-red-600 text-white rounded-lg p-3 text-xs flex items-center space-x-3 shadow-xs">
-      <span className="text-lg">⚠️</span>
-      <div>
-        <span className="font-extrabold uppercase block text-[10px] tracking-wider">Критическое предупреждение!</span>
-        <p className="font-medium mt-0.5">
-          Обнаружена просроченная партия этого товара! Немедленно изымите {totalExpired} шт. с полок и оформите Акт ТОРГ-16!
-        </p>
-      </div>
-    </div>
-  );
-})()}
+                          const expiredItems = adviceList.filter(a => {
+                            return a.batch.status === 'expired' && a.shelfRow.includes('ИЗЪЯТЬ');
+                          });
+
+                          const totalExpired = expiredItems.reduce((acc, i) => acc + i.batch.quantity, 0);
+
+                          if (expiredItems.length === 0 || totalExpired === 0) {
+                            return null;
+                          }
+
+                          return (
+                            <div className="mt-3 bg-red-600 text-white rounded-lg p-3 text-xs flex items-center space-x-3 shadow-xs">
+                              <span className="text-lg">⚠️</span>
+                              <div>
+                                <span className="font-extrabold uppercase block text-[10px] tracking-wider">Критическое предупреждение!</span>
+                                <p className="font-medium mt-0.5">
+                                  Обнаружена просроченная партия этого товара! Немедленно изымите {totalExpired} шт. с полок и оформите Акт ТОРГ-16!
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
 
                     </div>
@@ -360,33 +371,32 @@ const getDaysRemaining = (expiryDateStr: string) => {
 
         {/* Right column: FIFO Merchandising Standard & checklist */}
         <div className="space-y-6">
-          
+
           {/* Active Audit checklist card */}
           <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-xl p-5 shadow-2xs transition-colors">
             <h3 className="text-xs font-extrabold text-gray-900 dark:text-slate-100 uppercase tracking-tight mb-3 flex items-center space-x-1.5">
               <CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-400" />
               <span>Чек-лист проведения ротации</span>
             </h3>
-            
+
             <p className="text-[11px] text-gray-500 dark:text-slate-400 mb-4 leading-relaxed font-medium">
               Каждую смену ответственный сотрудник должен выполнять физическую перестановку товаров в закрепленном за ним отделе:
             </p>
 
             <div className="space-y-3">
               {fifoSteps.map((step, idx) => (
-                <div 
-                  key={idx} 
+                <div
+                  key={idx}
                   onClick={() => toggleStep(idx)}
-                  className={`border rounded-lg p-3 cursor-pointer transition-all flex items-start space-x-3 select-none ${
-                    checkedSteps[idx] 
-                      ? 'bg-green-50/50 dark:bg-green-950/10 border-green-200 dark:border-green-900/30' 
+                  className={`border rounded-lg p-3 cursor-pointer transition-all flex items-start space-x-3 select-none ${checkedSteps[idx]
+                      ? 'bg-green-50/50 dark:bg-green-950/10 border-green-200 dark:border-green-900/30'
                       : 'bg-white dark:bg-slate-900 border-gray-100 dark:border-slate-800 hover:bg-gray-50/50 dark:hover:bg-slate-850'
-                  }`}
+                    }`}
                 >
-                  <input 
-                    type="checkbox" 
+                  <input
+                    type="checkbox"
                     checked={!!checkedSteps[idx]}
-                    onChange={() => {}} // handled by parent onClick
+                    onChange={() => { }} // handled by parent onClick
                     className="mt-0.5 h-4 w-4 rounded-sm border-gray-350 dark:border-slate-700 text-green-600 focus:ring-green-500 cursor-pointer"
                   />
                   <div className="space-y-0.5">
@@ -404,11 +414,10 @@ const getDaysRemaining = (expiryDateStr: string) => {
               <button
                 onClick={handleCompleteRotation}
                 disabled={Object.keys(checkedSteps).length !== fifoSteps.length}
-                className={`w-full py-2.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center space-x-2 ${
-                  Object.keys(checkedSteps).length === fifoSteps.length
+                className={`w-full py-2.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center space-x-2 ${Object.keys(checkedSteps).length === fifoSteps.length
                     ? 'bg-green-600 hover:bg-green-700 text-white shadow-md cursor-pointer'
                     : 'bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-slate-500 cursor-not-allowed'
-                }`}
+                  }`}
               >
                 <UserCheck className="w-4 h-4" />
                 <span>Зафиксировать ротацию в ТСД</span>
@@ -432,7 +441,7 @@ const getDaysRemaining = (expiryDateStr: string) => {
               <BookOpen className="w-4 h-4 text-green-600 dark:text-green-400" />
               <span>Стандарт ТС «Мария-Ра»</span>
             </h3>
-            
+
             <div className="text-[11px] space-y-3 text-gray-600 dark:text-slate-300 font-medium leading-relaxed">
               <div className="border-l-2 border-amber-400 pl-2">
                 <p className="font-extrabold text-gray-800 dark:text-slate-200 text-xs">Правило зеленого стикера</p>

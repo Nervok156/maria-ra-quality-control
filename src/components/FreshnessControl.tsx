@@ -681,13 +681,26 @@ if (product.status === 'long_term') {
                           {product.location || 'Не указано'}
                         </td>
                         <td className="px-4 py-4">
-                          <span className="font-bold text-gray-700 dark:text-slate-300 block">
-                            {product.expirationDate.split('-').reverse().join('.')}
-                          </span>
-                          <span className="text-[10px] text-gray-400 dark:text-slate-500 block mt-0.5">
-                            изгот: {product.manufactureDate?.split('-').reverse().join('.') || 'нет данных'}
-                          </span>
-                        </td>
+  {product.status === 'long_term' ? (
+    <div>
+      <span className="font-bold text-purple-600 dark:text-purple-400 block">
+        ♾️ Бессрочный
+      </span>
+      <span className="text-[10px] text-gray-400 dark:text-slate-500 block mt-0.5">
+        изгот: {product.manufactureDate?.split('-').reverse().join('.') || 'не указана'}
+      </span>
+    </div>
+  ) : (
+    <>
+      <span className="font-bold text-gray-700 dark:text-slate-300 block">
+        {product.expirationDate.split('-').reverse().join('.')}
+      </span> 
+      <span className="text-[10px] text-gray-400 dark:text-slate-500 block mt-0.5">
+        изгот: {product.manufactureDate?.split('-').reverse().join('.') || 'нет данных'}
+      </span>
+    </>
+  )}
+</td>
                         <td className="px-4 py-4">
   {isWrittenOff ? (
     <span className="text-red-500 dark:text-red-400 font-mono text-[10px] font-bold">Снято с полки</span>
