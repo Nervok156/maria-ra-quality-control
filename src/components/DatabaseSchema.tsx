@@ -1,10 +1,38 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Database, Table, Key, Link2, Copy, Check, Info, 
-  Search, Trash2, Plus, RotateCcw, AlertTriangle, Play
+import {
+  Database,
+  Table,
+  Key,
+  Link2,
+  Copy,
+  Check,
+  Search,
+  Trash2,
+  Plus,
+  RotateCcw,
+  AlertTriangle
 } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
-import { saveDBState, addTelemetry, DBTableData, initialCategories, initialRoles, initialStores, initialSuppliers, initialShelfLocations } from '../data/databaseState';
+import {
+  getProducts,
+  getBatches,
+  getCategories,
+  getEmployees,
+  getRoles,
+  getStores,
+  getWriteoffActs,
+  getWriteoffItems,
+  getMarkdownLog,
+  getDeliveries,
+  getSuppliers,
+  getShelfLocations,
+  getAuditLogs,
+  getPriceHistory,
+  getTelemetry,
+  getEmployeeSchedules,
+  getSalesLog,
+  addTelemetry
+} from '../api/databaseAPI';
 
 interface Column {
   name: string;
@@ -17,7 +45,7 @@ interface Column {
 }
 
 interface DBTable {
-  name: keyof DBTableData;
+  name: string;
   russianName: string;
   description: string;
   columns: Column[];
@@ -248,8 +276,8 @@ export default function DatabaseSchema() {
   const [selectedTable, setSelectedTable] = useState<DBTable>(dbTables[0]);
   const [tableSearch, setTableSearch] = useState('');
   const [rowSearch, setRowSearch] = useState('');
-  
-  const [dbState, setDbState] = useState<DBTableData>({
+
+  const [dbState, setDbState] = useState<any>({
     products: [],
     batches: [],
     categories: [],
@@ -276,7 +304,7 @@ export default function DatabaseSchema() {
   const loadDataFromSupabase = async () => {
     try {
       setLoading(true);
-      
+
       const [
         products,
         batches,
@@ -296,43 +324,43 @@ export default function DatabaseSchema() {
         salesLog,
         categories
       ] = await Promise.all([
-        supabase.from('products').select('*'),
-        supabase.from('batches').select('*'),
-        supabase.from('employees').select('*'),
-        supabase.from('roles').select('*'),
-        supabase.from('stores').select('*'),
-        supabase.from('suppliers').select('*'),
-        supabase.from('shelf_locations').select('*'),
-        supabase.from('writeoff_acts').select('*'),
-        supabase.from('writeoff_items').select('*'),
-        supabase.from('markdown_log').select('*'),
-        supabase.from('deliveries').select('*'),
-        supabase.from('audit_logs').select('*'),
-        supabase.from('price_history').select('*'),
-        supabase.from('system_telemetry').select('*'),
-        supabase.from('employee_schedules').select('*'),
-        supabase.from('sales_log').select('*'),
-        supabase.from('categories').select('*')
+        getProducts(),
+        getBatches(),
+        getEmployees(),
+        getRoles(),
+        getStores(),
+        getSuppliers(),
+        getShelfLocations(),
+        getWriteoffActs(),
+        getWriteoffItems(),
+        getMarkdownLog(),
+        getDeliveries(),
+        getAuditLogs(),
+        getPriceHistory(),
+        getTelemetry(),
+        getEmployeeSchedules(),
+        getSalesLog(),
+        getCategories()
       ]);
 
       setDbState({
-        products: products.data || [],
-        batches: batches.data || [],
-        employees: employees.data || [],
-        roles: roles.data || [],
-        stores: stores.data || [],
-        suppliers: suppliers.data || [],
-        shelf_locations: shelfLocations.data || [],
-        writeoff_acts: writeoffActs.data || [],
-        writeoff_items: writeoffItems.data || [],
-        markdown_log: markdownLog.data || [],
-        deliveries: deliveries.data || [],
-        audit_logs: auditLogs.data || [],
-        price_history: priceHistory.data || [],
-        system_telemetry: telemetry.data || [],
-        employee_schedules: schedules.data || [],
-        sales_log: salesLog.data || [],
-        categories: categories.data || []
+        products: products || [],
+        batches: batches || [],
+        employees: employees || [],
+        roles: roles || [],
+        stores: stores || [],
+        suppliers: suppliers || [],
+        shelf_locations: shelfLocations || [],
+        writeoff_acts: writeoffActs || [],
+        writeoff_items: writeoffItems || [],
+        markdown_log: markdownLog || [],
+        deliveries: deliveries || [],
+        audit_logs: auditLogs || [],
+        price_history: priceHistory || [],
+        system_telemetry: telemetry || [],
+        employee_schedules: schedules || [],
+        sales_log: salesLog || [],
+        categories: categories || []
       });
     } catch (error) {
       console.error('❌ Ошибка загрузки данных из Supabase:', error);
@@ -343,9 +371,14 @@ export default function DatabaseSchema() {
 
   useEffect(() => {
     loadDataFromSupabase();
+
+    window.addEventListener('maria_ra_db_updated', loadDataFromSupabase);
+    return () => {
+      window.removeEventListener('maria_ra_db_updated', loadDataFromSupabase);
+    };
   }, []);
 
-  const filteredTables = dbTables.filter(t => 
+  const filteredTables = dbTables.filter(t =>
     t.name.toLowerCase().includes(tableSearch.toLowerCase()) ||
     t.russianName.toLowerCase().includes(tableSearch.toLowerCase()) ||
     t.description.toLowerCase().includes(tableSearch.toLowerCase())
@@ -353,39 +386,44 @@ export default function DatabaseSchema() {
 
   const handleResetDb = () => {
     if (window.confirm("Вы действительно хотите сбросить все 15 баз данных к заводским корпоративным настройкам? Все ваши добавленные записи будут очищены!")) {
-      localStorage.removeItem('maria_ra_db_state');
       loadDataFromSupabase();
-      addTelemetry('2', 'RESET_SYSTEM_DATABASE', { status: 'success' });
+      addTelemetry({
+        employee_id: '2',
+        action_type: 'RESET_SYSTEM_DATABASE',
+        payload: { status: 'success' }
+      });
       alert("Все 15 реляционных баз данных успешно перезагружены и заполнены тестовыми строками ТС «Мария-Ра».");
     }
   };
 
   const handleDeleteRow = async (rowId: string) => {
     const tableKey = selectedTable.name;
-    
+
     try {
-      // Удаляем запись из Supabase
       const { error } = await supabase
         .from(tableKey)
         .delete()
         .eq('id', rowId);
-      
+
       if (error) {
         console.error('❌ Ошибка удаления:', error);
         alert('Ошибка при удалении записи');
         return;
       }
-      
-      // Обновляем локальное состояние
+
       const currentRows = dbState[tableKey] || [];
-      const updatedRows = currentRows.filter(row => row.id !== rowId);
-      
+      const updatedRows = currentRows.filter((row: any) => row.id !== rowId);
+
       setDbState({
         ...dbState,
         [tableKey]: updatedRows
       });
-      
-      addTelemetry('2', 'DELETE_RECORD_DATABASE', { table: tableKey, record_id: rowId });
+
+      addTelemetry({
+        employee_id: '2',
+        action_type: 'DELETE_RECORD_DATABASE',
+        payload: { table: tableKey, record_id: rowId }
+      });
       window.dispatchEvent(new Event('maria_ra_db_updated'));
     } catch (error) {
       console.error('❌ Ошибка удаления:', error);
@@ -418,8 +456,7 @@ export default function DatabaseSchema() {
   const handleSaveNewRow = async (e: React.FormEvent) => {
     e.preventDefault();
     const tableKey = selectedTable.name;
-    
-    // Валидация
+
     for (const col of selectedTable.columns) {
       if (col.nullable === false && (newRowData[col.name] === undefined || newRowData[col.name] === '')) {
         alert(`Поле «${col.description}» не может быть пустым!`);
@@ -428,25 +465,41 @@ export default function DatabaseSchema() {
     }
 
     try {
-      // Вставка в Supabase
+      const formattedData: Record<string, any> = {};
+      selectedTable.columns.forEach(col => {
+        const value = newRowData[col.name];
+        if (col.type.includes('INTEGER')) {
+          formattedData[col.name] = parseInt(value) || 0;
+        } else if (col.type.includes('DECIMAL')) {
+          formattedData[col.name] = parseFloat(value) || 0;
+        } else if (col.type.includes('BOOLEAN')) {
+          formattedData[col.name] = value === true || value === 'true';
+        } else {
+          formattedData[col.name] = value;
+        }
+      });
+
       const { error } = await supabase
         .from(tableKey)
-        .insert([newRowData]);
-      
+        .insert([formattedData]);
+
       if (error) {
         console.error('❌ Ошибка вставки:', error);
         alert('Ошибка при добавлении записи');
         return;
       }
-      
-      // Обновляем локальное состояние
+
       const currentRows = dbState[tableKey] || [];
       setDbState({
         ...dbState,
-        [tableKey]: [newRowData, ...currentRows]
+        [tableKey]: [formattedData, ...currentRows]
       });
-      
-      addTelemetry('2', 'INSERT_RECORD_DATABASE', { table: tableKey, record_id: newRowData.id });
+
+      addTelemetry({
+        employee_id: '2',
+        action_type: 'INSERT_RECORD_DATABASE',
+        payload: { table: tableKey, record_id: formattedData.id }
+      });
       setShowAddModal(false);
       window.dispatchEvent(new Event('maria_ra_db_updated'));
     } catch (error) {
@@ -455,19 +508,11 @@ export default function DatabaseSchema() {
     }
   };
 
-  const activeRows = dbState[selectedTable.name] || [];
-  const filteredRows = activeRows.filter(row => {
-    if (!rowSearch) return true;
-    return Object.values(row).some(val => 
-      String(val).toLowerCase().includes(rowSearch.toLowerCase())
-    );
-  });
-
   const renderForeignKeyCell = (colName: string, val: any) => {
     if (!val) return <span className="text-gray-400">—</span>;
-    
+
     if (colName === 'product_id') {
-      const p = dbState.products.find(item => item.id === val);
+      const p = dbState.products.find((item: any) => item.id === val);
       return (
         <span className="inline-flex items-center bg-blue-50 dark:bg-blue-950/40 text-blue-800 dark:text-blue-300 px-1.5 py-0.5 rounded text-[11px] font-bold border border-blue-200/50">
           {p ? p.name : val}
@@ -475,7 +520,7 @@ export default function DatabaseSchema() {
       );
     }
     if (colName === 'category_id') {
-      const c = dbState.categories.find(item => item.id === val);
+      const c = dbState.categories.find((item: any) => item.id === val);
       return (
         <span className="inline-flex items-center bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 px-1.5 py-0.5 rounded text-[11px] font-bold border border-amber-200/50">
           {c ? c.russianName : val}
@@ -483,7 +528,7 @@ export default function DatabaseSchema() {
       );
     }
     if (colName === 'employee_id' || colName === 'creator_id' || colName === 'approved_by_id' || colName === 'receiver_id') {
-      const emp = dbState.employees.find(e => e.id === val);
+      const emp = dbState.employees.find((e: any) => e.id === val);
       return (
         <span className="inline-flex items-center bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 px-1.5 py-0.5 rounded text-[11px] font-bold border border-emerald-200/50">
           {emp ? emp.name : `Сотрудник ID: ${val}`}
@@ -491,7 +536,7 @@ export default function DatabaseSchema() {
       );
     }
     if (colName === 'role_id') {
-      const role = dbState.roles.find(r => r.id === val);
+      const role = dbState.roles.find((r: any) => r.id === val);
       return (
         <span className="inline-flex items-center bg-purple-50 dark:bg-purple-950/40 text-purple-800 dark:text-purple-300 px-1.5 py-0.5 rounded text-[11px] font-bold border border-purple-200/50">
           {role ? role.name : val}
@@ -499,7 +544,7 @@ export default function DatabaseSchema() {
       );
     }
     if (colName === 'supplier_id') {
-      const sup = dbState.suppliers.find(s => s.id === val);
+      const sup = dbState.suppliers.find((s: any) => s.id === val);
       return (
         <span className="inline-flex items-center bg-teal-50 dark:bg-teal-950/40 text-teal-800 dark:text-teal-300 px-1.5 py-0.5 rounded text-[11px] font-bold border border-teal-200/50">
           {sup ? sup.name : val}
@@ -507,7 +552,7 @@ export default function DatabaseSchema() {
       );
     }
     if (colName === 'location_id') {
-      const loc = dbState.shelf_locations.find(s => s.id === val);
+      const loc = dbState.shelf_locations.find((s: any) => s.id === val);
       return (
         <span className="inline-flex items-center bg-gray-50 dark:bg-slate-800 text-gray-800 dark:text-slate-300 px-1.5 py-0.5 rounded text-[11px] font-mono border border-gray-200 dark:border-slate-700">
           {loc ? loc.zone_code : val}
@@ -563,9 +608,16 @@ export default function DatabaseSchema() {
     );
   }
 
+  const activeRows = dbState[selectedTable.name] || [];
+  const filteredRows = activeRows.filter((row: any) => {
+    if (!rowSearch) return true;
+    return Object.values(row).some(val =>
+      String(val).toLowerCase().includes(rowSearch.toLowerCase())
+    );
+  });
+
   return (
     <div className="space-y-6">
-      
       <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-2xl p-6 shadow-xs transition-colors duration-200">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div className="space-y-1">
@@ -581,7 +633,7 @@ export default function DatabaseSchema() {
               Полнофункциональная рабочая среда реляционных баз данных. Изменения в этих таблицах (добавление, удаление) мгновенно влияют на товары на полках, приходные накладные, акты списания и логи телеметрии всей системы! Данные загружаются напрямую из Supabase.
             </p>
           </div>
-          
+
           <div className="flex items-center space-x-2 w-full md:w-auto shrink-0">
             <button
               onClick={() => setActiveTab('data')}
@@ -609,12 +661,11 @@ export default function DatabaseSchema() {
 
       {activeTab === 'data' ? (
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          
           <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-xl p-4 shadow-2xs h-[320px] lg:h-[650px] flex flex-col transition-colors duration-200">
             <div className="flex items-center space-x-2 bg-gray-50 dark:bg-slate-850 border border-gray-150 dark:border-slate-800 rounded-lg px-3 py-2 mb-3">
               <Search className="w-4 h-4 text-gray-400" />
-              <input 
-                type="text" 
+              <input
+                type="text"
                 placeholder="Поиск таблицы..."
                 value={tableSearch}
                 onChange={(e) => setTableSearch(e.target.value)}
@@ -623,7 +674,7 @@ export default function DatabaseSchema() {
             </div>
 
             <div className="text-[10px] uppercase font-black tracking-wider text-gray-400 mb-2 px-1">Таблицы базы данных ({filteredTables.length})</div>
-            
+
             <div className="flex-1 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
               {filteredTables.map((t) => {
                 const isSelected = selectedTable.name === t.name;
@@ -667,7 +718,6 @@ export default function DatabaseSchema() {
           </div>
 
           <div className="lg:col-span-3 bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-xl p-5 shadow-2xs h-[500px] lg:h-[650px] flex flex-col transition-colors duration-200">
-            
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-gray-50 dark:border-slate-800 pb-4 mb-4 shrink-0">
               <div className="flex items-center space-x-2.5">
                 <span className="p-1.5 bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-400 rounded-lg">
@@ -682,15 +732,15 @@ export default function DatabaseSchema() {
               <div className="flex items-center space-x-2 w-full sm:w-auto">
                 <div className="flex items-center space-x-1 bg-gray-50 dark:bg-slate-850 border border-gray-150 dark:border-slate-800 rounded-lg px-2.5 py-1.5 w-full sm:w-48">
                   <Search className="w-3.5 h-3.5 text-gray-400" />
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     placeholder="Фильтр строк..."
                     value={rowSearch}
                     onChange={(e) => setRowSearch(e.target.value)}
                     className="bg-transparent border-none text-[11px] text-gray-900 dark:text-slate-100 focus:outline-none w-full font-bold"
                   />
                 </div>
-                
+
                 <button
                   onClick={handleOpenAddModal}
                   className="flex items-center space-x-1 bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-tight cursor-pointer shrink-0 active:scale-98 shadow-xs"
@@ -718,7 +768,7 @@ export default function DatabaseSchema() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50 dark:divide-slate-800 font-semibold">
-                    {filteredRows.map((row, idx) => (
+                    {filteredRows.map((row: any, idx: number) => (
                       <tr key={row.id || idx} className="hover:bg-gray-50/40 dark:hover:bg-slate-900/50 transition-colors">
                         {selectedTable.columns.map(col => {
                           const val = row[col.name];
@@ -769,7 +819,6 @@ export default function DatabaseSchema() {
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          
           <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-xl p-4 shadow-2xs h-[300px] lg:h-[650px] flex flex-col transition-colors duration-200">
             <div className="text-[10px] uppercase font-black tracking-wider text-gray-400 mb-3 px-1">Схемы 15 таблиц PostgreSQL / 1С</div>
             <div className="flex-1 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
@@ -798,7 +847,7 @@ export default function DatabaseSchema() {
                 );
               })}
             </div>
-            
+
             <button
               onClick={copySqlToClipboard}
               className="mt-3 w-full flex items-center justify-center space-x-2 bg-slate-900 hover:bg-black text-white dark:bg-green-600 dark:hover:bg-green-700 py-2.5 rounded-xl text-xs font-black uppercase tracking-tight transition-all shadow-xs cursor-pointer active:scale-98"
@@ -890,17 +939,15 @@ ${selectedTable.columns.map(c => {
         </div>
       )}
 
-      {/* MODAL */}
       {showAddModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
           <div className="bg-white dark:bg-slate-900 border border-gray-150 dark:border-slate-800 rounded-2xl max-w-lg w-full overflow-hidden shadow-xl animate-scale-up">
-            
             <div className="bg-green-600 text-white px-6 py-4 flex justify-between items-center">
               <div className="flex items-center space-x-2">
                 <Database className="w-5 h-5" />
                 <span className="font-extrabold uppercase tracking-tight text-xs">Добавить запись: {selectedTable.name}</span>
               </div>
-              <button 
+              <button
                 onClick={() => setShowAddModal(false)}
                 className="text-white/80 hover:text-white font-black text-sm cursor-pointer"
               >
@@ -921,8 +968,8 @@ ${selectedTable.columns.map(c => {
                   return (
                     <div key={col.name} className="space-y-1">
                       <label className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase block">{label}</label>
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         disabled
                         value={newRowData[col.name] || ''}
                         className="w-full bg-gray-50 dark:bg-slate-850 border border-gray-150 dark:border-slate-800 rounded-lg px-3 py-2 text-xs font-mono text-gray-400 font-bold"
@@ -932,7 +979,7 @@ ${selectedTable.columns.map(c => {
                 }
 
                 if (col.isForeign && col.refTable) {
-                  const refTableRows = dbState[col.refTable as keyof DBTableData] || [];
+                  const refTableRows = dbState[col.refTable] || [];
                   return (
                     <div key={col.name} className="space-y-1">
                       <label className="text-[10px] font-black text-gray-700 dark:text-slate-300 uppercase block">
@@ -961,7 +1008,7 @@ ${selectedTable.columns.map(c => {
                 if (col.type.includes('BOOLEAN')) {
                   return (
                     <div key={col.name} className="flex items-center space-x-3 p-1.5 bg-gray-50/50 dark:bg-slate-850 rounded-lg border border-gray-100 dark:border-slate-800">
-                      <input 
+                      <input
                         type="checkbox"
                         id={`add-form-${col.name}`}
                         checked={!!newRowData[col.name]}
@@ -981,7 +1028,7 @@ ${selectedTable.columns.map(c => {
                       <label className="text-[10px] font-black text-gray-700 dark:text-slate-300 uppercase block">
                         {label} {isRequired && <span className="text-red-500">*</span>}
                       </label>
-                      <input 
+                      <input
                         type="number"
                         step={col.type.includes('DECIMAL') ? '0.01' : '1'}
                         value={newRowData[col.name] !== undefined ? newRowData[col.name] : ''}
@@ -1000,7 +1047,7 @@ ${selectedTable.columns.map(c => {
                       <label className="text-[10px] font-black text-gray-700 dark:text-slate-300 uppercase block">
                         {label} {isRequired && <span className="text-red-500">*</span>}
                       </label>
-                      <input 
+                      <input
                         type="date"
                         value={newRowData[col.name] || ''}
                         onChange={(e) => setNewRowData({ ...newRowData, [col.name]: e.target.value })}
@@ -1016,7 +1063,7 @@ ${selectedTable.columns.map(c => {
                     <label className="text-[10px] font-black text-gray-700 dark:text-slate-300 uppercase block">
                       {label} {isRequired && <span className="text-red-500">*</span>}
                     </label>
-                    <input 
+                    <input
                       type="text"
                       value={newRowData[col.name] || ''}
                       onChange={(e) => setNewRowData({ ...newRowData, [col.name]: e.target.value })}
@@ -1043,12 +1090,10 @@ ${selectedTable.columns.map(c => {
                   Сохранить строку
                 </button>
               </div>
-
             </form>
           </div>
         </div>
       )}
-
     </div>
   );
 }

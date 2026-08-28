@@ -1192,3 +1192,104 @@ for (const item of items) {
 }
   return receipt;
 }
+// ==========================================================
+// 25. ДОПОЛНИТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ СОВМЕСТИМОСТИ
+// ==========================================================
+
+// Обновление расписания сотрудника (уже есть updateScheduleForDate)
+// но добавим обертку для совместимости
+export async function updateEmployeeSchedule(
+  directorId: string,
+  employeeId: string,
+  dayType: 'today' | 'tomorrow',
+  shiftName: string,
+  status: string
+) {
+  // Определяем дату
+  const date = new Date();
+  if (dayType === 'tomorrow') {
+    date.setDate(date.getDate() + 1);
+  }
+  
+  // Используем существующую функцию
+  return await updateScheduleForDate(employeeId, date, shiftName, status, 'weekday');
+}
+
+// Получение активных товаров (уже есть getActiveProducts)
+// но добавим алиас для совместимости
+export const getActiveProductsFromDB = getActiveProducts;
+
+// Функция для быстрого получения состояния (заменяет getDBState)
+export async function getFullDBState() {
+  const state = await getFullState();
+  return state;
+}
+
+// Функция для записи продажи (уже есть recordSaleInSupabase)
+// но добавим обертку для совместимости
+export const recordSaleInDB = recordSaleInSupabase;
+
+// Функция для уценки (уже есть createMarkdown)
+export const markdownBatchInDB = createMarkdown;
+
+// Функция для создания акта списания (уже есть createWriteoffAct и createWriteoffItems)
+export async function createWriteoffActInDB(creatorId: string, items: any[]) {
+  const actNumber = `АКТ-ТОРГ16-00${Date.now().toString().slice(-5)}`;
+  
+  // Создаем акт
+  const act = await createWriteoffAct({
+    act_number: actNumber,
+    store_id: 'store_1',
+    creator_id: creatorId,
+    approved_by_id: null,
+    is_exported_to_1c: false
+  });
+  
+  if (!act) {
+    throw new Error('Не удалось создать акт списания');
+  }
+  
+  // Создаем строки акта
+  const formattedItems = items.map(item => ({
+    act_id: act.id,
+    product_id: item.product_id,
+    quantity: item.quantity,
+    reason: item.reason || 'Истек срок годности',
+    unit_price: item.unit_price
+  }));
+  
+  await createWriteoffItems(formattedItems);
+  
+  // Помечаем партии как списанные
+  for (const item of items) {
+    // Находим партию по product_id
+    const { data: batches } = await supabase
+      .from('batches')
+      .select('id')
+      .eq('product_id', item.product_id)
+      .eq('is_written_off', false)
+      .limit(1);
+    
+    if (batches && batches.length > 0) {
+      await supabase
+        .from('batches')
+        .update({ 
+          is_written_off: true,
+          writeoff_reason: item.reason || 'Истек срок годности'
+        })
+        .eq('id', batches[0].id);
+    }
+  }
+  
+  return act.id;
+}
+
+// Добавление телеметрии (уже есть addTelemetry)
+// но переименуем для совместимости
+export const addTelemetryToDB = addTelemetry;
+
+// Функция для утверждения акта (уже есть approveWriteoffAct)
+export const approveActInDB = approveWriteoffAct;
+
+// Функция для получения расписания (уже есть getSchedulesByDate)
+export const getEmployeeSchedulesFromDB = getSchedulesByDate;

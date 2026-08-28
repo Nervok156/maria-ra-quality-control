@@ -30,7 +30,11 @@ export const productTemplates = [
   { name: 'Сардельки Свиные Барнаульский МК, 500 г', category: 'meat_sausage', barcode: '4607123980143', price: 290, shelfLifeDays: 15, location: 'Холодильник Колбасы' },
   { name: 'Рис Круглозерный Алтайская Сказка, 800 г', category: 'grocery', barcode: '4601230490012', price: 89, shelfLifeDays: 365, location: 'Бакалея Стеллаж 4' },
   { name: 'Вода минеральная Карачинская 1.5 л', category: 'beverages', barcode: '4605550010115', price: 45, shelfLifeDays: 180, location: 'Напитки Ряд 1' },
-  { name: 'Шоколад Алёнка молочный, 90 г', category: 'confectionery', barcode: '4600120150221', price: 90, shelfLifeDays: 120, location: 'Шоколад Ряд 2' }
+  { name: 'Шоколад Алёнка молочный, 90 г', category: 'confectionery', barcode: '4600120150221', price: 90, shelfLifeDays: 120, location: 'Шоколад Ряд 2' },
+  { name: 'Мангал стальной, складной', category: 'other', barcode: '4601234567890', price: 1500, shelfLifeDays: 99999, location: 'shelf_6' },
+  { name: 'Подгузники Huggies 5-й размер, 40 шт', category: 'other', barcode: '4609876543210', price: 899, shelfLifeDays: 99999, location: 'shelf_6' },
+  { name: 'Средство для мытья посуды Fairy, 450 мл', category: 'other', barcode: '4605550010116', price: 299, shelfLifeDays: 99999, location: 'shelf_6' },
+  { name: 'Стиральный порошок Tide, 3 кг', category: 'other', barcode: '4605550010117', price: 599, shelfLifeDays: 99999, location: 'shelf_6' }
 ];
 
 export const employees: Employee[] = [

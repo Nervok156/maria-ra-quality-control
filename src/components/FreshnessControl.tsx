@@ -7,7 +7,7 @@ import {
 import { Product, ProductCategory, Employee } from '../types';
 import { categoryLabels, categoryColors, productTemplates } from '../data/initialProducts';
 import { supabase } from '../lib/supabaseClient';
-import { createProduct, createBatch, createMarkdown, createWriteoffAct, createWriteoffItems, getActiveProducts, addTelemetry } from '../api/databaseAPI';
+import { createProduct, createBatch, createMarkdown, createWriteoffAct, createWriteoffItems, getActiveProducts, addTelemetryToDB } from '../api/databaseAPI';
 
 interface FreshnessControlProps {
   products: Product[];
@@ -295,7 +295,7 @@ const calculateStatusAndPercent = (expiryDateStr: string, manufactureDateStr?: s
         new_price: Math.round(selectedProduct.price * (1 - markdownPercent / 100))
       });
       
-      await addTelemetry({
+      await addTelemetryToDB ({
         employee_id: currentUser?.id || '1',
         action_type: 'MARKDOWN_PRODUCT',
         payload: { batch_id: selectedProduct.id, discount_percent: markdownPercent }
@@ -375,7 +375,7 @@ const calculateStatusAndPercent = (expiryDateStr: string, manufactureDateStr?: s
       }
       console.log('✅ Партия помечена как списанная');
       
-      await addTelemetry({
+      await addTelemetryToDB ({
         employee_id: currentUser?.id || '1',
         action_type: 'CREATE_WRITEOFF_ACT',
         payload: { act_id: act.id, items_count: 1 }
@@ -1281,6 +1281,7 @@ if (product.status === 'long_term') {
                     <option value="shelf_3">Полки хлебобулочных изделий (shelf_3)</option>
                     <option value="shelf_4">Стеллажи бакалеи (shelf_4)</option>
                     <option value="shelf_5">Стеллаж кондитерской продукции (shelf_5)</option>
+                    <option value="shelf_6">Стеллаж прочих товаров (shelf_6)</option> 
                   </select>
                 </div>
               </div>
