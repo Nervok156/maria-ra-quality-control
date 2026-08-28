@@ -164,14 +164,14 @@ const isPastDate = (date: Date) => {
   }
 };
 
-  useEffect(() => {
-    loadDataFromSupabase();
-    
-    window.addEventListener('maria_ra_db_updated', loadDataFromSupabase);
-    return () => {
-      window.removeEventListener('maria_ra_db_updated', loadDataFromSupabase);
-    };
-  }, []);
+useEffect(() => {
+  loadDataFromSupabase();
+  
+  window.addEventListener('maria_ra_db_updated', loadDataFromSupabase);
+  return () => {
+    window.removeEventListener('maria_ra_db_updated', loadDataFromSupabase);
+  };
+}, []);
 // Загружаем расписание при смене дня (только в режиме "День")
 useEffect(() => {
   if (viewMode === 'day') {
@@ -515,9 +515,8 @@ useEffect(() => {
 
       {/* --- RENDER 1: DIRECTOR WORKSPACE --- */}
       {currentUser.role === 'Директор магазина' && (() => {
-        const totalRevenue = dbState.sales_log?.reduce((sum, s) => {
-  // Возвраты уже имеют отрицательную сумму
-  return sum + s.total_sum;
+        const totalRevenue = dbState.sales_log?.reduce((sum: number, s: any) => {
+  return sum + (s.total_sum || 0);
 }, 0) || 0;
         const totalCogs = totalRevenue * 0.6;
         
