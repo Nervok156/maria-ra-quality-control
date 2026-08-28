@@ -11,7 +11,9 @@ import {
   getTodayReceipts,
   getNextReceiptNumber,
   recordSaleInSupabase,
-  getActiveProducts
+  getActiveProducts,
+  searchReceiptsForReturn,
+  createReturnReceipt
 } from '../api/databaseAPI';
 import { Product, Employee } from '../types';
 
@@ -38,6 +40,15 @@ export default function CashierWorkspace({ currentUser, onDataChange }: CashierW
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card'>('cash');
   const [paidAmount, setPaidAmount] = useState<number>(0);
+
+  // ==========================================================
+  // СОСТОЯНИЯ ДЛЯ ВОЗВРАТА
+  // ==========================================================
+  const [returnMode, setReturnMode] = useState(false);
+  const [searchReceiptTerm, setSearchReceiptTerm] = useState('');
+  const [foundReceipts, setFoundReceipts] = useState<any[]>([]);
+  const [selectedReceiptForReturn, setSelectedReceiptForReturn] = useState<any>(null);
+  const [selectedReturnItems, setSelectedReturnItems] = useState<Set<string>>(new Set());
 
   // ==========================================================
   // ЗАГРУЗКА ЧЕКОВ
@@ -244,10 +255,10 @@ export default function CashierWorkspace({ currentUser, onDataChange }: CashierW
   // СКАЧИВАНИЕ ЧЕКОВ И ОТЧЁТОВ
   // ==========================================================
   const handleDownloadReceipt = (receipt: any) => {
-  const items = receipt.receipt_items || [];
-  const date = new Date(receipt.created_at).toLocaleString('ru-RU');
-  
-  let text = `
+    const items = receipt.receipt_items || [];
+    const date = new Date(receipt.created_at).toLocaleString('ru-RU');
+    
+    let text = `
 ==================================================
     ТС «Мария-Ра» - Филиал №142
     г. Барнаул, пр. Ленина, 54
@@ -259,13 +270,12 @@ export default function CashierWorkspace({ currentUser, onDataChange }: CashierW
 Товар                           Кол-во   Цена
 --------------------------------------------------`;
 
-  items.forEach((item: any) => {
-    // ✅ Используем products.name из связанной таблицы
-    const productName = item.products?.name || 'Товар без названия';
-    text += `\n${productName.padEnd(35)} ${item.quantity} x ${item.unit_price} = ${item.total_price} ₽`;
-  });
+    items.forEach((item: any) => {
+      const productName = item.products?.name || 'Товар';
+      text += `\n${productName.padEnd(35)} ${item.quantity} x ${item.unit_price} = ${item.total_price} ₽`;
+    });
 
-  text += `
+    text += `
 --------------------------------------------------
 ИТОГО:                                    ${receipt.total_amount.toFixed(2)} ₽
 Оплата: ${receipt.payment_method === 'cash' ? 'Наличные' : 'Карта'}
@@ -277,37 +287,32 @@ export default function CashierWorkspace({ currentUser, onDataChange }: CashierW
 ==================================================
     `;
 
-  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `чек_${receipt.receipt_number}.txt`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-};
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `чек_${receipt.receipt_number}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
-  // ==========================================================
-  // СКАЧИВАНИЕ ОТЧЁТА ЗА СМЕНУ
-  // ==========================================================
   const handleDownloadShiftReport = () => {
-  if (!receipts || receipts.length === 0) {
-    setError('Нет чеков за сегодня');
-    setTimeout(() => setError(null), 3000);
-    return;
-  }
+    if (!receipts || receipts.length === 0) {
+      setError('Нет чеков за сегодня');
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
 
-  const date = new Date().toLocaleDateString('ru-RU');
-  
-  const totalRevenue = receipts.reduce((sum: number, r: any) => sum + (r.total_amount || 0), 0);
-  
-  const totalItems = receipts.reduce((sum: number, r: any) => {
-    const items = r.receipt_items || [];
-    return sum + items.reduce((itemSum: number, item: any) => itemSum + (item.quantity || 0), 0);
-  }, 0);
-  
-  let text = `
+    const date = new Date().toLocaleDateString('ru-RU');
+    const totalRevenue = receipts.reduce((sum: number, r: any) => sum + (r.total_amount || 0), 0);
+    const totalItems = receipts.reduce((sum: number, r: any) => {
+      const items = r.receipt_items || [];
+      return sum + items.reduce((itemSum: number, item: any) => itemSum + (item.quantity || 0), 0);
+    }, 0);
+    
+    let text = `
 ==================================================
     ТС «Мария-Ра» - Филиал №142
     г. Барнаул, пр. Ленина, 54
@@ -324,41 +329,116 @@ export default function CashierWorkspace({ currentUser, onDataChange }: CashierW
     ЧЕКИ ЗА СМЕНУ:
 `;
 
-  receipts.forEach((receipt: any, index: number) => {
-    const items = receipt.receipt_items || [];
-    const totalQtyInReceipt = items.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0);
-    
-    text += `
+    receipts.forEach((receipt: any, index: number) => {
+      const items = receipt.receipt_items || [];
+      const totalQtyInReceipt = items.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0);
+      
+      text += `
 ${index + 1}. Чек №${receipt.receipt_number}
    Время: ${new Date(receipt.created_at).toLocaleTimeString('ru-RU')}
    Товаров (шт.): ${totalQtyInReceipt}
    Сумма: ${receipt.total_amount?.toFixed(2) || '0.00'} ₽
    Оплата: ${receipt.payment_method === 'cash' ? 'Наличные' : 'Карта'}
-   Товары:`;
-    
-    items.forEach((item: any) => {
-      const productName = item.products?.name || 'Товар без названия';
-      text += `\n     - ${productName} (${item.quantity} шт.)`;
+`;
     });
-  });
 
-  text += `
+    text += `
 ==================================================
     КОНЕЦ ОТЧЁТА
     Спасибо за работу!
 ==================================================
     `;
 
-  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `отчёт_за_смену_${date}.txt`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-};
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `отчёт_за_смену_${date}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  // ==========================================================
+  // ПОИСК ЧЕКОВ ДЛЯ ВОЗВРАТА
+  // ==========================================================
+  const handleSearchReceipts = async () => {
+    if (!searchReceiptTerm.trim()) {
+      setFoundReceipts([]);
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      const results = await searchReceiptsForReturn(searchReceiptTerm);
+      setFoundReceipts(results);
+    } catch (error) {
+      console.error('❌ Ошибка поиска чеков:', error);
+      setError('Ошибка поиска чеков');
+      setTimeout(() => setError(null), 3000);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ==========================================================
+  // ОФОРМЛЕНИЕ ВОЗВРАТА
+  // ==========================================================
+  const handleReturn = async () => {
+    if (!selectedReceiptForReturn) {
+      setError('Выберите чек для возврата');
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
+    
+    const items = selectedReceiptForReturn.receipt_items || [];
+    const selectedItems = items.filter((item: any) => selectedReturnItems.has(item.id));
+    
+    if (selectedItems.length === 0) {
+      setError('Выберите хотя бы один товар для возврата');
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      
+      const returnItems = selectedItems.map((item: any) => ({
+        receipt_item_id: item.id,
+        product_id: item.product_id,
+        batch_id: item.batch_id,
+        quantity: item.quantity,
+        unit_price: item.unit_price
+      }));
+      
+      const receipt = await createReturnReceipt(
+        selectedReceiptForReturn.id,
+        returnItems,
+        currentUser.id,
+        'cash'
+      );
+      
+      await loadReceipts();
+      await onDataChange();
+      
+      setSuccessMessage(`Возврат оформлен! Чек №${receipt.receipt_number}`);
+      setTimeout(() => setSuccessMessage(null), 3000);
+      
+      setReturnMode(false);
+      setSelectedReceiptForReturn(null);
+      setSelectedReturnItems(new Set());
+      setFoundReceipts([]);
+      setSearchReceiptTerm('');
+      
+    } catch (error) {
+      console.error('❌ Ошибка оформления возврата:', error);
+      setError('Ошибка оформления возврата');
+      setTimeout(() => setError(null), 3000);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // ==========================================================
   // JSX
@@ -543,60 +623,188 @@ ${index + 1}. Чек №${receipt.receipt_number}
             </span>
           </div>
           
-         <div className="space-y-3 max-h-[350px] overflow-y-auto">
-  {!receipts || receipts.length === 0 ? (
-    <div className="text-center py-10 text-gray-400 text-sm">
-      Нет чеков за сегодня
-    </div>
-  ) : (
-    receipts.map((receipt) => (
-      <div
-        key={receipt.id}
-        className="bg-gray-50 dark:bg-slate-800 rounded-lg p-4 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
-      >
-        <div className="flex justify-between items-start">
-          <div className="flex-1 min-w-0">
-            <span className="text-sm font-bold text-gray-900 dark:text-slate-100 block">
-              Чек №{receipt.receipt_number}
-              {receipt.is_return && (
-                <span className="ml-2 text-xs text-red-500 font-bold">(Возврат)</span>
+          {/* ✅ КНОПКА ВОЗВРАТА */}
+          <div className="flex gap-2 mb-4">
+            <button
+              onClick={() => {
+                setReturnMode(!returnMode);
+                if (!returnMode) {
+                  setSelectedReceiptForReturn(null);
+                  setSelectedReturnItems(new Set());
+                  setFoundReceipts([]);
+                }
+              }}
+              className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors ${
+                returnMode 
+                  ? 'bg-red-600 hover:bg-red-700 text-white'
+                  : 'bg-gray-200 dark:bg-slate-800 hover:bg-gray-300 dark:hover:bg-slate-700 text-gray-700 dark:text-slate-300'
+              }`}
+            >
+              {returnMode ? '❌ Отмена возврата' : '🔄 Возврат товара'}
+            </button>
+          </div>
+          
+          {/* ✅ БЛОК ВОЗВРАТА */}
+          {returnMode && (
+            <div className="bg-gray-50 dark:bg-slate-800/50 rounded-xl p-4 mb-4 border border-gray-200 dark:border-slate-700">
+              <h4 className="text-sm font-black text-gray-700 dark:text-slate-300 mb-3">
+                🔄 Поиск чека для возврата
+              </h4>
+              
+              <div className="flex gap-2 mb-3">
+                <input
+                  type="text"
+                  placeholder="Введите номер чека..."
+                  value={searchReceiptTerm}
+                  onChange={(e) => setSearchReceiptTerm(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSearchReceipts()}
+                  className="flex-1 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-green-500"
+                />
+                <button
+                  onClick={handleSearchReceipts}
+                  disabled={loading}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-bold transition-colors disabled:opacity-50"
+                >
+                  {loading ? '...' : 'Найти'}
+                </button>
+              </div>
+              
+              {foundReceipts.length > 0 && (
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {foundReceipts.map((receipt) => (
+                    <div
+                      key={receipt.id}
+                      onClick={() => {
+                        setSelectedReceiptForReturn(receipt);
+                        setSelectedReturnItems(new Set(
+                          (receipt.receipt_items || []).map((item: any) => item.id)
+                        ));
+                      }}
+                      className={`bg-white dark:bg-slate-900 border-2 rounded-lg p-3 cursor-pointer transition-colors ${
+                        selectedReceiptForReturn?.id === receipt.id
+                          ? 'border-green-500 bg-green-50 dark:bg-green-950/10'
+                          : 'border-gray-200 dark:border-slate-700 hover:border-green-300'
+                      }`}
+                    >
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <span className="text-sm font-bold text-gray-900 dark:text-slate-100">
+                            Чек №{receipt.receipt_number}
+                          </span>
+                          <span className="text-xs text-gray-400 block">
+                            {new Date(receipt.created_at).toLocaleString('ru-RU')}
+                          </span>
+                        </div>
+                        <span className="text-sm font-bold text-green-600 dark:text-green-400">
+                          {receipt.total_amount?.toFixed(2) || '0.00'} ₽
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
-            </span>
-            <span className="text-xs text-gray-400">
-              {new Date(receipt.created_at).toLocaleString('ru-RU')}
-            </span>
-            {/* ✅ СПИСОК ТОВАРОВ В ЧЕКЕ */}
-            <div className="mt-2 space-y-0.5">
-              {(receipt.receipt_items || []).map((item: any, idx: number) => (
-  <div key={idx} className="text-xs text-gray-600 dark:text-gray-400 flex justify-between">
-    <span className="truncate max-w-[200px]">
-      {item.products?.name || 'Товар без названия'} × {item.quantity}
-    </span>
-    <span className="font-medium">{item.total_price?.toFixed(2) || '0.00'} ₽</span>
-  </div>
-))}
+              
+              {selectedReceiptForReturn && (
+                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-slate-700">
+                  <h5 className="text-xs font-bold text-gray-700 dark:text-slate-300 mb-2">
+                    Выберите товары для возврата:
+                  </h5>
+                  <div className="space-y-1 max-h-40 overflow-y-auto">
+                    {(selectedReceiptForReturn.receipt_items || []).map((item: any) => (
+                      <div
+                        key={item.id}
+                        className="flex items-center space-x-3 p-2 bg-white dark:bg-slate-900 rounded-lg border border-gray-100 dark:border-slate-800"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedReturnItems.has(item.id)}
+                          onChange={() => {
+                            const newSet = new Set(selectedReturnItems);
+                            if (newSet.has(item.id)) {
+                              newSet.delete(item.id);
+                            } else {
+                              newSet.add(item.id);
+                            }
+                            setSelectedReturnItems(newSet);
+                          }}
+                          className="w-4 h-4 text-green-600 rounded cursor-pointer"
+                        />
+                        <span className="text-sm flex-1 text-gray-700 dark:text-slate-300">
+                          {item.products?.name || 'Товар'} × {item.quantity}
+                        </span>
+                        <span className="text-sm font-bold text-gray-900 dark:text-slate-100">
+                          {item.total_price?.toFixed(2) || '0.00'} ₽
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  
+                  <button
+                    onClick={handleReturn}
+                    disabled={loading || selectedReturnItems.size === 0}
+                    className="w-full mt-3 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white rounded-lg text-sm font-bold transition-colors disabled:cursor-not-allowed"
+                  >
+                    {loading ? 'Обработка...' : `Оформить возврат (${selectedReturnItems.size} товаров)`}
+                  </button>
+                </div>
+              )}
             </div>
+          )}
+          
+          {/* Список чеков */}
+          <div className="space-y-3 max-h-[350px] overflow-y-auto">
+            {!receipts || receipts.length === 0 ? (
+              <div className="text-center py-10 text-gray-400 text-sm">
+                Нет чеков за сегодня
+              </div>
+            ) : (
+              receipts.map((receipt) => (
+                <div
+                  key={receipt.id}
+                  className="bg-gray-50 dark:bg-slate-800 rounded-lg p-4 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+                >
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <span className="text-sm font-bold text-gray-900 dark:text-slate-100 block">
+                        Чек №{receipt.receipt_number}
+                        {receipt.is_return && (
+                          <span className="ml-2 text-xs text-red-500 font-bold">(Возврат)</span>
+                        )}
+                      </span>
+                      <span className="text-xs text-gray-400">
+                        {new Date(receipt.created_at).toLocaleString('ru-RU')}
+                      </span>
+                      <div className="mt-1 space-y-0.5">
+                        {(receipt.receipt_items || []).map((item: any, idx: number) => (
+                          <div key={idx} className="text-xs text-gray-600 dark:text-gray-400 flex justify-between">
+                            <span className="truncate max-w-[180px]">
+                              {item.products?.name || 'Товар'} × {item.quantity}
+                            </span>
+                            <span className="font-medium">{item.total_price?.toFixed(2) || '0.00'} ₽</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0 ml-4">
+                      <span className="text-base font-bold text-green-600 dark:text-green-400">
+                        {receipt.total_amount?.toFixed(2) || '0.00'} ₽
+                      </span>
+                      <div className="flex gap-1 mt-1">
+                        <button
+                          onClick={() => handleDownloadReceipt(receipt)}
+                          className="px-3 py-1.5 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 rounded text-xs font-bold hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors flex items-center space-x-1"
+                          title="Скачать чек"
+                        >
+                          <Download className="w-4 h-4" />
+                          <span>Скачать</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
-          <div className="text-right shrink-0 ml-4">
-            <span className="text-base font-bold text-green-600 dark:text-green-400">
-              {receipt.total_amount?.toFixed(2) || '0.00'} ₽
-            </span>
-            <div className="flex gap-1 mt-1">
-              <button
-                onClick={() => handleDownloadReceipt(receipt)}
-                className="px-3 py-1.5 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 rounded text-xs font-bold hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors flex items-center space-x-1"
-                title="Скачать чек"
-              >
-                <Download className="w-4 h-4" />
-                <span>Скачать</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    ))
-  )}
-</div>
           
           <div className="mt-4 pt-4 border-t border-gray-100 dark:border-slate-800">
             <button

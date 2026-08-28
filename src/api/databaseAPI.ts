@@ -1011,3 +1011,100 @@ export async function getNextReceiptNumber(storeId: string = 'store_1') {
   
   return `${dateStr}-0001`;
 }
+// ==========================================================
+// 24. ВОЗВРАТ ТОВАРОВ
+// ==========================================================
+
+// Поиск чеков для возврата
+export async function searchReceiptsForReturn(searchTerm: string) {
+  const { data, error } = await supabase
+    .from('receipts')
+    .select(`
+      *,
+      receipt_items(
+        *,
+        products(
+          id,
+          name,
+          barcode,
+          base_price
+        )
+      )
+    `)
+    .ilike('receipt_number', `%${searchTerm}%`)
+    .eq('is_return', false)
+    .order('created_at', { ascending: false })
+    .limit(20);
+  
+  if (error) {
+    console.error('❌ Ошибка поиска чеков:', error);
+    throw error;
+  }
+  return data || [];
+}
+
+// Создание чека возврата
+export async function createReturnReceipt(
+  originalReceiptId: string,
+  items: { receipt_item_id: string; product_id: string; batch_id: string; quantity: number; unit_price: number }[],
+  cashierId: string,
+  paymentMethod: 'cash' | 'card'
+) {
+  const totalAmount = items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
+  
+  // Получаем номер чека
+  const receiptNumber = await getNextReceiptNumber('store_1');
+  
+  // Создаём чек возврата
+  const receipt = await createReceipt({
+    receipt_number: receiptNumber,
+    cashier_id: cashierId,
+    store_id: 'store_1',
+    total_amount: totalAmount,
+    payment_method: paymentMethod,
+    paid_amount: totalAmount,
+    change_amount: 0,
+    is_return: true,
+    return_for_id: originalReceiptId
+  });
+  
+  if (!receipt) {
+    throw new Error('Не удалось создать чек возврата');
+  }
+  
+  // Создаём позиции возврата
+  const receiptItems = items.map(item => ({
+    receipt_id: receipt.id,
+    product_id: item.product_id,
+    batch_id: item.batch_id,
+    quantity: item.quantity,
+    unit_price: item.unit_price,
+    total_price: item.quantity * item.unit_price
+  }));
+  
+  await createReceiptItems(receiptItems);
+  
+  // ✅ Возвращаем товары на полку (увеличиваем остатки)
+  for (const item of items) {
+    // Находим партию
+    const { data: batch, error: batchError } = await supabase
+      .from('batches')
+      .select('quantity')
+      .eq('id', item.batch_id)
+      .single();
+    
+    if (batchError) {
+      console.error('❌ Ошибка поиска партии:', batchError);
+      continue;
+    }
+    
+    // Увеличиваем количество
+    const newQuantity = (batch?.quantity || 0) + item.quantity;
+    await supabase
+      .from('batches')
+      .update({ quantity: newQuantity })
+      .eq('id', item.batch_id);
+  }
+  
+  return receipt;
+}

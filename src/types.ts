@@ -13,6 +13,7 @@ export interface Product {
   name: string;
   category: ProductCategory;
   price: number;
+  base_price?: number;  
   quantity: number;
   expirationDate: string;
   manufactureDate?: string;
