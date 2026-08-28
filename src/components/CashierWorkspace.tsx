@@ -307,48 +307,55 @@ export default function CashierWorkspace({ currentUser, onDataChange }: CashierW
   // СКАЧИВАНИЕ ЧЕКОВ И ОТЧЁТОВ
   // ==========================================================
   const handleDownloadReceipt = (receipt: any) => {
-    const items = receipt.receipt_items || [];
-    const date = new Date(receipt.created_at).toLocaleString('ru-RU');
-    
-    let text = `
+  const items = receipt.receipt_items || [];
+  const date = new Date(receipt.created_at).toLocaleString('ru-RU');
+  
+  // ✅ Определяем тип чека
+  const isReturn = receipt.is_return === true;
+  const receiptType = isReturn ? 'ЧЕК ВОЗВРАТА' : 'ЧЕК ПРОДАЖИ';
+  
+  let text = `
 ==================================================
     ТС «Мария-Ра» - Филиал №142
     г. Барнаул, пр. Ленина, 54
 ==================================================
-ЧЕК №: ${receipt.receipt_number}
+${receiptType} №: ${receipt.receipt_number}
 Дата: ${date}
 Кассир: ${currentUser.name}
+${isReturn ? `Основание: возврат по чеку №${receipt.return_for_id || 'не указан'}` : ''}
 --------------------------------------------------
 Товар                           Кол-во   Цена
 --------------------------------------------------`;
 
-    items.forEach((item: any) => {
-      const productName = item.products?.name || 'Товар';
-      text += `\n${productName.padEnd(35)} ${item.quantity} x ${item.unit_price} = ${item.total_price} ₽`;
-    });
+  items.forEach((item: any) => {
+    const productName = item.products?.name || 'Товар';
+    text += `\n${productName.padEnd(35)} ${item.quantity} x ${item.unit_price} = ${item.total_price} ₽`;
+  });
 
-    text += `
+  text += `
 --------------------------------------------------
 ИТОГО:                                    ${receipt.total_amount.toFixed(2)} ₽
 Оплата: ${receipt.payment_method === 'cash' ? 'Наличные' : 'Карта'}
 Внесено: ${receipt.paid_amount.toFixed(2)} ₽
-Сдача: ${receipt.change_amount.toFixed(2)} ₽
+${isReturn ? '' : `Сдача: ${receipt.change_amount.toFixed(2)} ₽`}
 ==================================================
-    Спасибо за покупку!
-    Товар возврату не подлежит
+${isReturn ? 
+  '    Возврат принят. Денежные средства возвращены.' : 
+  '    Спасибо за покупку!\n    Товар возврату не подлежит'}
 ==================================================
     `;
 
-    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `чек_${receipt.receipt_number}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${isReturn ? 'возврат' : 'чек'}_${receipt.receipt_number}.txt`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+};
+
 
   const handleDownloadShiftReport = () => {
     if (!receipts || receipts.length === 0) {
