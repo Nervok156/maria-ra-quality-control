@@ -1016,6 +1016,7 @@ export async function getNextReceiptNumber(storeId: string = 'store_1') {
 // ==========================================================
 
 // Поиск чеков для возврата
+// Поиск чеков для возврата (упрощённая версия)
 export async function searchReceiptsForReturn(searchTerm: string) {
   const { data, error } = await supabase
     .from('receipts')
@@ -1033,14 +1034,6 @@ export async function searchReceiptsForReturn(searchTerm: string) {
     `)
     .ilike('receipt_number', `%${searchTerm}%`)
     .eq('is_return', false)
-    // ✅ Исключаем чеки, которые уже были возвращены
-    .not('id', 'in', (await supabase
-      .from('receipts')
-      .select('return_for_id')
-      .eq('is_return', true)
-      .then(res => res.data || [])
-      .then(data => data.map(r => r.return_for_id).filter(Boolean) as string[])
-    ))
     .order('created_at', { ascending: false })
     .limit(20);
   

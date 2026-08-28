@@ -15,6 +15,7 @@ import {
   searchReceiptsForReturn,
   createReturnReceipt
 } from '../api/databaseAPI';
+import { supabase } from '../lib/supabaseClient';
 import { Product, Employee } from '../types';
 
 interface CashierWorkspaceProps {
@@ -364,43 +365,76 @@ ${index + 1}. Чек №${receipt.receipt_number}
   // ПОИСК ЧЕКОВ ДЛЯ ВОЗВРАТА
   // ==========================================================
   const handleSearchReceipts = async () => {
-    if (!searchReceiptTerm.trim()) {
-      setFoundReceipts([]);
-      return;
-    }
+  if (!searchReceiptTerm.trim()) {
+    setFoundReceipts([]);
+    return;
+  }
+  
+  try {
+    setLoading(true);
+    const results = await searchReceiptsForReturn(searchReceiptTerm);
     
-    try {
-      setLoading(true);
-      const results = await searchReceiptsForReturn(searchReceiptTerm);
-      setFoundReceipts(results);
-    } catch (error) {
-      console.error('❌ Ошибка поиска чеков:', error);
-      setError('Ошибка поиска чеков');
+    // ✅ Получаем список ID чеков, которые уже были возвращены
+    const { data: returns } = await supabase
+      .from('receipts')
+      .select('return_for_id')
+      .eq('is_return', true);
+    
+    const returnedIds = new Set(returns?.map((r: any) => r.return_for_id) || []);
+    
+    // ✅ Фильтруем: показываем только чеки, которые ещё не возвращали
+    const filteredResults = results.filter(receipt => !returnedIds.has(receipt.id));
+    
+    setFoundReceipts(filteredResults);
+    
+    if (filteredResults.length === 0 && results.length > 0) {
+      setError('Все найденные чеки уже были возвращены');
       setTimeout(() => setError(null), 3000);
-    } finally {
-      setLoading(false);
     }
-  };
+  } catch (error) {
+    console.error('❌ Ошибка поиска чеков:', error);
+    setError('Ошибка поиска чеков');
+    setTimeout(() => setError(null), 3000);
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   // ==========================================================
   // ОФОРМЛЕНИЕ ВОЗВРАТА
   // ==========================================================
   const handleReturn = async () => {
-    if (!selectedReceiptForReturn) {
-      setError('Выберите чек для возврата');
-      setTimeout(() => setError(null), 3000);
-      return;
-    }
-    
-    const items = selectedReceiptForReturn.receipt_items || [];
-    const selectedItems = items.filter((item: any) => selectedReturnItems.has(item.id));
-    
-    if (selectedItems.length === 0) {
-      setError('Выберите хотя бы один товар для возврата');
-      setTimeout(() => setError(null), 3000);
-      return;
-    }
-    
+  if (!selectedReceiptForReturn) {
+    setError('Выберите чек для возврата');
+    setTimeout(() => setError(null), 3000);
+    return;
+  }
+  
+  // ✅ Проверяем, не был ли уже возвращён этот чек
+  const { data: existingReturns } = await supabase
+    .from('receipts')
+    .select('id')
+    .eq('return_for_id', selectedReceiptForReturn.id)
+    .eq('is_return', true);
+  
+  if (existingReturns && existingReturns.length > 0) {
+    setError('Этот чек уже был возвращён!');
+    setTimeout(() => setError(null), 3000);
+    setSelectedReceiptForReturn(null);
+    setSelectedReturnItems(new Set());
+    return;
+  }
+  
+  const items = selectedReceiptForReturn.receipt_items || [];
+  const selectedItems = items.filter((item: any) => selectedReturnItems.has(item.id));
+  
+  if (selectedItems.length === 0) {
+    setError('Выберите хотя бы один товар для возврата');
+    setTimeout(() => setError(null), 3000);
+    return;
+  }
+
     try {
       setLoading(true);
       
