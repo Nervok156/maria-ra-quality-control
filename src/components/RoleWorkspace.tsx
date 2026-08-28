@@ -515,7 +515,10 @@ useEffect(() => {
 
       {/* --- RENDER 1: DIRECTOR WORKSPACE --- */}
       {currentUser.role === 'Директор магазина' && (() => {
-        const totalRevenue = dbState.sales_log?.reduce((sum, s) => sum + s.total_sum, 0) || 0;
+        const totalRevenue = dbState.sales_log?.reduce((sum, s) => {
+  // Возвраты уже имеют отрицательную сумму
+  return sum + s.total_sum;
+}, 0) || 0;
         const totalCogs = totalRevenue * 0.6;
         
         const approvedActs = dbState.writeoff_acts.filter(act => act.approved_by_id);

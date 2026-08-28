@@ -1033,6 +1033,14 @@ export async function searchReceiptsForReturn(searchTerm: string) {
     `)
     .ilike('receipt_number', `%${searchTerm}%`)
     .eq('is_return', false)
+    // ✅ Исключаем чеки, которые уже были возвращены
+    .not('id', 'in', (await supabase
+      .from('receipts')
+      .select('return_for_id')
+      .eq('is_return', true)
+      .then(res => res.data || [])
+      .then(data => data.map(r => r.return_for_id).filter(Boolean) as string[])
+    ))
     .order('created_at', { ascending: false })
     .limit(20);
   
@@ -1043,6 +1051,7 @@ export async function searchReceiptsForReturn(searchTerm: string) {
   return data || [];
 }
 
+
 // Создание чека возврата
 export async function createReturnReceipt(
   originalReceiptId: string,
@@ -1052,10 +1061,25 @@ export async function createReturnReceipt(
 ) {
   const totalAmount = items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
   
-  // Получаем номер чека
+  // Проверяем, не был ли уже возвращён этот чек
+  const { data: existingReturns, error: checkError } = await supabase
+    .from('receipts')
+    .select('id')
+    .eq('return_for_id', originalReceiptId)
+    .eq('is_return', true);
+  
+  if (checkError) {
+    console.error('❌ Ошибка проверки возврата:', checkError);
+    throw new Error('Ошибка проверки возврата');
+  }
+  
+  if (existingReturns && existingReturns.length > 0) {
+    throw new Error('Этот чек уже был возвращён!');
+  }
+  
   const receiptNumber = await getNextReceiptNumber('store_1');
   
-  // Создаём чек возврата
+  // 1. Создаём чек возврата
   const receipt = await createReceipt({
     receipt_number: receiptNumber,
     cashier_id: cashierId,
@@ -1072,7 +1096,7 @@ export async function createReturnReceipt(
     throw new Error('Не удалось создать чек возврата');
   }
   
-  // Создаём позиции возврата
+  // 2. Создаём позиции возврата
   const receiptItems = items.map(item => ({
     receipt_id: receipt.id,
     product_id: item.product_id,
@@ -1084,9 +1108,8 @@ export async function createReturnReceipt(
   
   await createReceiptItems(receiptItems);
   
-  // ✅ Возвращаем товары на полку (увеличиваем остатки)
+  // 3. ✅ Возвращаем товары на полку
   for (const item of items) {
-    // Находим партию
     const { data: batch, error: batchError } = await supabase
       .from('batches')
       .select('quantity')
@@ -1098,12 +1121,29 @@ export async function createReturnReceipt(
       continue;
     }
     
-    // Увеличиваем количество
     const newQuantity = (batch?.quantity || 0) + item.quantity;
     await supabase
       .from('batches')
       .update({ quantity: newQuantity })
       .eq('id', item.batch_id);
+  }
+  
+  // 4. ✅ Записываем возврат в sales_log (с отрицательной суммой)
+  for (const item of items) {
+    const { error: saleError } = await supabase
+      .from('sales_log')
+      .insert([{
+        id: `return_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+        product_id: item.product_id,
+        quantity: -item.quantity, // Отрицательное количество = возврат
+        unit_price: item.unit_price,
+        total_sum: -(item.quantity * item.unit_price), // Отрицательная сумма
+        sold_at: new Date().toISOString()
+      }]);
+    
+    if (saleError) {
+      console.error('❌ Ошибка записи возврата в sales_log:', saleError);
+    }
   }
   
   return receipt;
