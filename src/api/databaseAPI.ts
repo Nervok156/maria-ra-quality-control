@@ -523,10 +523,11 @@ export async function getFullState() {
 // ==========================================================
 export async function getActiveProducts() {
   try {
+    // ✅ Теперь показываем все партии с quantity > 0, а не только is_written_off = false
     const { data: batches, error: batchesError } = await supabase
       .from('batches')
       .select('*')
-      .eq('is_written_off', false);
+      .gt('quantity', 0);  // ← изменили условие
     
     if (batchesError) throw batchesError;
 
@@ -635,14 +636,23 @@ export async function recordSaleInSupabase(productId: string, quantity: number, 
       return false;
     }
 
+    // ✅ Если количество стало 0, помечаем партию как распроданную
     if (newQuantity <= 0) {
       await supabase
         .from('batches')
         .update({ is_written_off: true })
         .eq('id', batchId);
-      console.log('📦 Партия полностью распродана');
+      console.log('📦 Партия полностью распродана, помечена как is_written_off = true');
+    } else {
+      // ✅ Если количество > 0, убеждаемся, что is_written_off = false
+      await supabase
+        .from('batches')
+        .update({ is_written_off: false })
+        .eq('id', batchId);
+      console.log(`📦 Партия имеет остаток ${newQuantity}, is_written_off = false`);
     }
 
+    // Записываем продажу в sales_log
     const totalSum = quantity * unitPrice;
     const { error: saleError } = await supabase
       .from('sales_log')
@@ -667,6 +677,7 @@ export async function recordSaleInSupabase(productId: string, quantity: number, 
     return false;
   }
 }
+
 
 // ==========================================================
 // 21. РАБОТА С РАСПИСАНИЕМ СОТРУДНИКОВ (ПО ДАТАМ)
