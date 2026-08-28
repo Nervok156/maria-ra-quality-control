@@ -43,7 +43,7 @@ import {
   createWriteoffAct,
   createWriteoffItems,
   approveWriteoffAct,
-  addTelemetry
+  addTelemetryToDB
 } from '../api/databaseAPI';
 import { supabase } from '../lib/supabaseClient';
 
@@ -292,7 +292,7 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
 
       if (error) throw error;
 
-      await addTelemetry({
+      await addTelemetryToDB({
         employee_id: currentUser.id,
         action_type: 'HIRE_EMPLOYEE',
         payload: { employee_name: newEmpName, personnel_number: newEmpPersNum }
@@ -320,7 +320,7 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
           .update({ is_active: false })
           .eq('id', empId);
 
-        await addTelemetry({
+        await addTelemetryToDB({
           employee_id: currentUser.id,
           action_type: 'DEACTIVATE_EMPLOYEE',
           payload: { employee_id: empId, name: empName }
@@ -403,7 +403,7 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
         location_id: supplyLocation
       });
 
-      await addTelemetry({
+      await addTelemetryToDB({
         employee_id: currentUser.id,
         action_type: 'RECEIVE_DELIVERY',
         payload: { delivery_id: delivery?.[0]?.id, product: prod.name, qty }
@@ -509,7 +509,7 @@ export default function RoleWorkspace({ currentUser, onDbUpdate }: RoleWorkspace
         })
         .eq('id', batch.id);
 
-      await addTelemetry({
+      await addTelemetryToDB({
         employee_id: currentUser.id,
         action_type: 'CREATE_WRITEOFF_ACT',
         payload: { act_id: act.id, items_count: 1 }

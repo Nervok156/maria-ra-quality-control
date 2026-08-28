@@ -31,7 +31,7 @@ import {
   getTelemetry,
   getEmployeeSchedules,
   getSalesLog,
-  addTelemetry
+  addTelemetryToDB
 } from '../api/databaseAPI';
 
 interface Column {
@@ -387,7 +387,7 @@ export default function DatabaseSchema() {
   const handleResetDb = () => {
     if (window.confirm("Вы действительно хотите сбросить все 15 баз данных к заводским корпоративным настройкам? Все ваши добавленные записи будут очищены!")) {
       loadDataFromSupabase();
-      addTelemetry({
+      addTelemetryToDB({
         employee_id: '2',
         action_type: 'RESET_SYSTEM_DATABASE',
         payload: { status: 'success' }
@@ -419,7 +419,7 @@ export default function DatabaseSchema() {
         [tableKey]: updatedRows
       });
 
-      addTelemetry({
+      addTelemetryToDB({
         employee_id: '2',
         action_type: 'DELETE_RECORD_DATABASE',
         payload: { table: tableKey, record_id: rowId }
@@ -495,7 +495,7 @@ export default function DatabaseSchema() {
         [tableKey]: [formattedData, ...currentRows]
       });
 
-      addTelemetry({
+      addTelemetryToDB({
         employee_id: '2',
         action_type: 'INSERT_RECORD_DATABASE',
         payload: { table: tableKey, record_id: formattedData.id }
