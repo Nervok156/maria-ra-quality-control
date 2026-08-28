@@ -26,9 +26,45 @@ export default function FreshnessControl({ products, setProducts, currentUser, o
     localStorage.setItem('maria_ra_active_sub_tab', activeSubTab);
   }, [activeSubTab]);
 
-  const handlePrint = () => {
-    window.print();
-  };
+const handlePrint = () => {
+  // Запоминаем текущий title
+  const originalTitle = document.title;
+  
+  // Меняем title на пустую строку (убирает название по центру)
+  document.title = '';
+  
+  // Добавляем стиль для скрытия колонтитулов
+  const style = document.createElement('style');
+  style.textContent = `
+    @page {
+      margin-top: 15mm;
+      margin-bottom: 15mm;
+      margin-left: 15mm;
+      margin-right: 15mm;
+    }
+    /* Работает в Chrome/Edge */
+    @page {
+      @top-left { content: '' !important; }
+      @top-center { content: '' !important; }
+      @top-right { content: '' !important; }
+      @bottom-left { content: '' !important; }
+      @bottom-center { content: '' !important; }
+    }
+  `;
+  document.head.appendChild(style);
+  
+  // Печатаем
+  window.print();
+  
+  // Восстанавливаем
+  setTimeout(() => {
+    document.title = originalTitle;
+    if (style.parentNode) {
+      style.parentNode.removeChild(style);
+    }
+  }, 100);
+};
+
 
   // ✅ Проверка прав на уценку
   const canMarkdown = currentUser.role === 'Директор магазина' || currentUser.role === 'Старший товаровед';
