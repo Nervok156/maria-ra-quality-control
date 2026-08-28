@@ -1106,25 +1106,50 @@ export async function createReturnReceipt(
   
   await createReceiptItems(receiptItems);
   
-  // 3. ✅ Возвращаем товары на полку
-  for (const item of items) {
-    const { data: batch, error: batchError } = await supabase
-      .from('batches')
-      .select('quantity')
-      .eq('id', item.batch_id)
-      .single();
-    
-    if (batchError) {
-      console.error('❌ Ошибка поиска партии:', batchError);
-      continue;
-    }
-    
-    const newQuantity = (batch?.quantity || 0) + item.quantity;
-    await supabase
-      .from('batches')
-      .update({ quantity: newQuantity })
-      .eq('id', item.batch_id);
+ // 3. ✅ Возвращаем товары на полку и обновляем статус
+for (const item of items) {
+  const { data: batch, error: batchError } = await supabase
+    .from('batches')
+    .select('quantity, is_written_off, is_marked_down')
+    .eq('id', item.batch_id)
+    .single();
+  
+  if (batchError) {
+    console.error('❌ Ошибка поиска партии:', batchError);
+    continue;
   }
+  
+  const newQuantity = (batch?.quantity || 0) + item.quantity;
+  
+  // ✅ Обновляем количество и статусы
+  const updateData: any = { 
+    quantity: newQuantity 
+  };
+  
+  // Если партия была списана, возвращаем в оборот
+  if (batch?.is_written_off === true) {
+    updateData.is_written_off = false;
+    updateData.writeoff_reason = null;
+    console.log('📦 Партия была списана, возвращаем в оборот');
+  }
+  
+  // ✅ Если партия была уценена, снимаем уценку
+  if (batch?.is_marked_down === true) {
+    updateData.is_marked_down = false;
+    console.log('🏷️ Партия была уценена, снимаем отметку');
+  }
+  
+  const { error: updateError } = await supabase
+    .from('batches')
+    .update(updateData)
+    .eq('id', item.batch_id);
+  
+  if (updateError) {
+    console.error('❌ Ошибка обновления партии:', updateError);
+  } else {
+    console.log(`📦 Товар возвращён на полку, новый остаток: ${newQuantity}`);
+  }
+}
   
 // 4. ✅ ЗАПИСЫВАЕМ ВОЗВРАТ В sales_log
 console.log('🔄 Записываем возврат в sales_log...');
