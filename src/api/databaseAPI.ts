@@ -1126,23 +1126,33 @@ export async function createReturnReceipt(
       .eq('id', item.batch_id);
   }
   
-  // 4. ✅ Записываем возврат в sales_log (с отрицательной суммой)
-  for (const item of items) {
-    const { error: saleError } = await supabase
-      .from('sales_log')
-      .insert([{
-        id: `return_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
-        product_id: item.product_id,
-        quantity: -item.quantity, // Отрицательное количество = возврат
-        unit_price: item.unit_price,
-        total_sum: -(item.quantity * item.unit_price), // Отрицательная сумма
-        sold_at: new Date().toISOString()
-      }]);
-    
-    if (saleError) {
-      console.error('❌ Ошибка записи возврата в sales_log:', saleError);
-    }
-  }
+// 4. ✅ ЗАПИСЫВАЕМ ВОЗВРАТ В sales_log
+console.log('🔄 Записываем возврат в sales_log...');
+for (const item of items) {
+  const negativeQuantity = -item.quantity;
+  const negativeTotal = -(item.quantity * item.unit_price);
   
+  const returnRecord = {
+    id: `return_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,  // ✅ Добавляем id
+    product_id: item.product_id,
+    quantity: negativeQuantity,
+    unit_price: item.unit_price,
+    total_sum: negativeTotal,
+    sold_at: new Date().toISOString()
+  };
+  
+  console.log('📝 Данные для записи:', returnRecord);
+  
+  const { error: saleError } = await supabase
+    .from('sales_log')
+    .insert([returnRecord]);
+  
+  if (saleError) {
+    console.error('❌ Ошибка записи возврата в sales_log:', saleError);
+    console.error('❌ Детали:', saleError.message);
+  } else {
+    console.log('✅ Возврат записан в sales_log');
+  }
+}
   return receipt;
 }
