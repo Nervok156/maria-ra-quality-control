@@ -93,72 +93,87 @@ export default function CashierWorkspace({ currentUser, onDataChange }: CashierW
   // КОРЗИНА
   // ==========================================================
   const addToCart = async (product: Product) => {
-    try {
-      console.log('🔄 Добавляем товар:', product.name);
-      
-      if (!product.id) {
-        setError('Ошибка: у товара нет ID');
-        setTimeout(() => setError(null), 3000);
-        return;
-      }
-
-      let batches = [];
-      try {
-        batches = await getAvailableBatches(product.id);
-      } catch (error) {
-        console.error('❌ Ошибка получения партий:', error);
-        const activeProducts = await getActiveProducts();
-        const foundProduct = activeProducts.find(p => p.id === product.id);
-        if (foundProduct && foundProduct.quantity > 0) {
-          batches = [{
-            id: `batch_${Date.now()}`,
-            product_id: product.id,
-            quantity: foundProduct.quantity,
-            expiration_date: foundProduct.expirationDate || new Date().toISOString().split('T')[0]
-          }];
-        }
-      }
-      
-      if (!batches || batches.length === 0) {
-        setError('Нет доступных партий этого товара на полках');
-        setTimeout(() => setError(null), 3000);
-        return;
-      }
-
-      const batch = batches[0];
-      const unitPrice = product.base_price || product.price || 0;
-
-      const existingItem = cart.find(item => item.product.id === product.id && item.batchId === batch.id);
-      
-      if (existingItem) {
-        if (existingItem.quantity >= (batch.quantity || 999)) {
-          setError('Недостаточно товара на полке');
-          setTimeout(() => setError(null), 3000);
-          return;
-        }
-        setCart(cart.map(item => 
-          item.product.id === product.id && item.batchId === batch.id
-            ? { ...item, quantity: item.quantity + 1, totalPrice: (item.quantity + 1) * unitPrice }
-            : item
-        ));
-      } else {
-        setCart([...cart, {
-          product,
-          batchId: batch.id,
-          quantity: 1,
-          unitPrice: unitPrice,
-          totalPrice: unitPrice
-        }]);
-      }
-      
-      setSuccessMessage('Товар добавлен в чек');
-      setTimeout(() => setSuccessMessage(null), 2000);
-    } catch (error) {
-      console.error('❌ Ошибка добавления товара:', error);
-      setError('Ошибка добавления товара');
+  try {
+    console.log('🔄 Добавляем товар:', product.name);
+    
+    if (!product.id) {
+      setError('Ошибка: у товара нет ID');
       setTimeout(() => setError(null), 3000);
+      return;
     }
-  };
+
+    let batches = [];
+    try {
+      batches = await getAvailableBatches(product.id);
+    } catch (error) {
+      console.error('❌ Ошибка получения партий:', error);
+      const activeProducts = await getActiveProducts();
+      const foundProduct = activeProducts.find(p => p.id === product.id);
+      if (foundProduct && foundProduct.quantity > 0) {
+        batches = [{
+          id: `batch_${Date.now()}`,
+          product_id: product.id,
+          quantity: foundProduct.quantity,
+          expiration_date: foundProduct.expirationDate || new Date().toISOString().split('T')[0]
+        }];
+      }
+    }
+    
+    if (!batches || batches.length === 0) {
+      setError('Нет доступных партий этого товара на полках');
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
+
+    const batch = batches[0];
+    
+    // ✅ Проверяем, есть ли уценка для этой партии
+    let unitPrice = product.price || 0;
+    
+    const { data: markdowns, error: markdownError } = await supabase
+      .from('markdown_log')
+      .select('new_price')
+      .eq('batch_id', batch.id)
+      .order('marked_at', { ascending: false })
+      .limit(1);
+    
+    if (!markdownError && markdowns && markdowns.length > 0) {
+      unitPrice = markdowns[0].new_price;
+      console.log('🏷️ Найдена уценка, цена:', unitPrice);
+    }
+
+    const existingItem = cart.find(item => item.product.id === product.id && item.batchId === batch.id);
+    
+    if (existingItem) {
+      if (existingItem.quantity >= (batch.quantity || 999)) {
+        setError('Недостаточно товара на полке');
+        setTimeout(() => setError(null), 3000);
+        return;
+      }
+      setCart(cart.map(item => 
+        item.product.id === product.id && item.batchId === batch.id
+          ? { ...item, quantity: item.quantity + 1, totalPrice: (item.quantity + 1) * unitPrice }
+          : item
+      ));
+    } else {
+      setCart([...cart, {
+        product,
+        batchId: batch.id,
+        quantity: 1,
+        unitPrice: unitPrice,
+        totalPrice: unitPrice
+      }]);
+    }
+    
+    setSuccessMessage('Товар добавлен в чек');
+    setTimeout(() => setSuccessMessage(null), 2000);
+  } catch (error) {
+    console.error('❌ Ошибка добавления товара:', error);
+    setError('Ошибка добавления товара');
+    setTimeout(() => setError(null), 3000);
+  }
+};
+
 
   const removeFromCart = (index: number) => {
     setCart(cart.filter((_, i) => i !== index));
@@ -210,27 +225,28 @@ export default function CashierWorkspace({ currentUser, onDataChange }: CashierW
       }
 
       const items = [];
-      for (const item of cart) {
-        items.push({
-          receipt_id: receipt.id,
-          product_id: item.product.id,
-          batch_id: item.batchId,
-          quantity: item.quantity,
-          unit_price: item.unitPrice,
-          total_price: item.totalPrice
-        });
-
-        try {
-          await recordSaleInSupabase(
-            item.product.id,
-            item.quantity,
-            item.unitPrice,
-            item.batchId
-          );
-        } catch (saleError) {
-          console.error('❌ Ошибка списания товара:', saleError);
-        }
-      }
+     for (const item of cart) {
+  // Проверяем уценку для этой партии
+  const { data: markdowns } = await supabase
+    .from('markdown_log')
+    .select('new_price')
+    .eq('batch_id', item.batchId)
+    .order('marked_at', { ascending: false })
+    .limit(1);
+  
+  const actualPrice = (markdowns && markdowns.length > 0) 
+    ? markdowns[0].new_price 
+    : item.unitPrice;
+  
+  items.push({
+    receipt_id: receipt.id,
+    product_id: item.product.id,
+    batch_id: item.batchId,
+    quantity: item.quantity,
+    unit_price: actualPrice,
+    total_price: item.quantity * actualPrice
+  });
+}
 
       await createReceiptItems(items);
       
