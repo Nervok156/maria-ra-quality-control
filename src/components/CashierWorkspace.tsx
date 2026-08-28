@@ -310,40 +310,47 @@ export default function CashierWorkspace({ currentUser, onDataChange }: CashierW
   const items = receipt.receipt_items || [];
   const date = new Date(receipt.created_at).toLocaleString('ru-RU');
   
-  // ✅ Определяем тип чека
   const isReturn = receipt.is_return === true;
-  const receiptType = isReturn ? 'ЧЕК ВОЗВРАТА' : 'ЧЕК ПРОДАЖИ';
+  const receiptType = isReturn ? 'ЧЕК ВОЗВРАТА' : 'КАССОВЫЙ ЧЕК';
+  
+  // Считаем общее количество товаров
+  const totalItems = items.reduce((sum: number, item: any) => sum + item.quantity, 0);
   
   let text = `
 ==================================================
-    ТС «Мария-Ра» - Филиал №142
-    г. Барнаул, пр. Ленина, 54
+           ТС «Мария-Ра» - Филиал №142
+           г. Барнаул, пр. Ленина, 54
+           ИНН: 2221003491 / КПП: 222101001
 ==================================================
 ${receiptType} №: ${receipt.receipt_number}
 Дата: ${date}
 Кассир: ${currentUser.name}
 ${isReturn ? `Основание: возврат по чеку №${receipt.return_for_id || 'не указан'}` : ''}
 --------------------------------------------------
-Товар                           Кол-во   Цена
+№  Товар                     Кол-во    Цена
 --------------------------------------------------`;
 
-  items.forEach((item: any) => {
+  items.forEach((item: any, index: number) => {
     const productName = item.products?.name || 'Товар';
-    text += `\n${productName.padEnd(35)} ${item.quantity} x ${item.unit_price} = ${item.total_price} ₽`;
+    const line = `${(index + 1).toString().padEnd(3)} ${productName.padEnd(25)} ${item.quantity.toString().padStart(6)} x ${item.unit_price.toFixed(2)} = ${item.total_price.toFixed(2)} ₽`;
+    text += `\n${line}`;
   });
 
   text += `
 --------------------------------------------------
-ИТОГО:                                    ${receipt.total_amount.toFixed(2)} ₽
-Оплата: ${receipt.payment_method === 'cash' ? 'Наличные' : 'Карта'}
-Внесено: ${receipt.paid_amount.toFixed(2)} ₽
-${isReturn ? '' : `Сдача: ${receipt.change_amount.toFixed(2)} ₽`}
+${isReturn ? 'ВОЗВРАТ' : 'ИТОГО'}:${' '.repeat(28)} ${receipt.total_amount.toFixed(2)} ₽
+Количество товаров:${' '.repeat(20)} ${totalItems} шт.
+Оплата:${' '.repeat(30)} ${receipt.payment_method === 'cash' ? 'Наличными' : 'Банковской картой'}
+Внесено:${' '.repeat(28)} ${receipt.paid_amount.toFixed(2)} ₽
+${isReturn ? '' : `Сдача:${' '.repeat(30)} ${receipt.change_amount.toFixed(2)} ₽`}
+${isReturn ? '' : `Способ оплаты:${' '.repeat(23)} Полный расчёт`}
 ==================================================
 ${isReturn ? 
-  '    Возврат принят. Денежные средства возвращены.' : 
-  '    Спасибо за покупку!\n    Товар возврату не подлежит'}
+  '    Возврат принят. Средства возвращены покупателю.' : 
+  '    Благодарим за покупку!\n    Ждём вас снова в ТС «Мария-Ра»'}
+${isReturn ? '' : '\n    Товар надлежащего качества обмену и возврату\n    не подлежит согласно Закону РФ "О защите прав\n    потребителей"'}
 ==================================================
-    `;
+  `;
 
   const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
   const url = URL.createObjectURL(blob);
