@@ -181,3 +181,158 @@
 .react-calendar-wrapper {
   animation: slideDown 0.2s ease-out;
 }
+/* ==========================================================
+   СТИЛИ ДЛЯ ПЕЧАТИ АКТОВ ТОРГ-16
+   ========================================================== */
+
+@media print {
+  /* Скрываем все лишние элементы */
+  header,
+  .no-print,
+  footer,
+  .print-hidden {
+    display: none !important;
+  }
+
+  /* Убираем фон и тени */
+  body {
+    background: white !important;
+    color: black !important;
+  }
+
+  /* Контейнер акта */
+  .print-container {
+    margin: 0 !important;
+    padding: 10mm !important;
+    background: white !important;
+    border: none !important;
+    box-shadow: none !important;
+    font-size: 10px !important;
+    line-height: 1.4 !important;
+  }
+
+  /* Таблица акта */
+  .print-container table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    font-size: 9px !important;
+  }
+
+  .print-container table th,
+  .print-container table td {
+    border: 1px solid black !important;
+    padding: 4px 6px !important;
+    text-align: center !important;
+  }
+
+  /* Подписи */
+  .print-container .signatures {
+    margin-top: 20px !important;
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 20px !important;
+  }
+
+  /* ЭЦП штамп */
+  .print-container .stamp {
+    position: absolute !important;
+    right: 20mm !important;
+    top: 50mm !important;
+    border: 3px double #2d7d3a !important;
+    color: #2d7d3a !important;
+    padding: 8px 12px !important;
+    font-size: 8px !important;
+    font-weight: bold !important;
+    text-transform: uppercase !important;
+    rotate: -6deg !important;
+    background: white !important;
+  }
+
+  /* Заголовок акта */
+  .print-container .act-title {
+    text-align: center !important;
+    font-size: 14px !important;
+    font-weight: 900 !important;
+    text-transform: uppercase !important;
+    margin: 10px 0 !important;
+  }
+
+  .print-container .act-subtitle {
+    text-align: center !important;
+    font-size: 12px !important;
+    font-weight: 700 !important;
+    margin: 4px 0 !important;
+  }
+
+  .print-container .act-date {
+    text-align: center !important;
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    margin: 8px 0 16px 0 !important;
+  }
+
+  /* Страница */
+  .print-page {
+    page-break-after: avoid !important;
+  }
+
+  /* Запрет разрыва внутри таблицы */
+  .print-container table tbody tr {
+    page-break-inside: avoid !important;
+  }
+
+  /* Итого */
+  .print-container .total-row {
+    font-weight: 900 !important;
+    background: #f5f5f5 !important;
+  }
+
+  /* Подписи */
+  .print-container .signature-line {
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+    margin-top: 8px !important;
+  }
+
+  .print-container .signature-line .line {
+    flex: 1 !important;
+    border-bottom: 1px solid black !important;
+    min-width: 120px !important;
+  }
+}
+
+/* Стили для обычного просмотра (не печать) */
+.print-container {
+  font-family: 'Times New Roman', serif !important;
+}
+
+.print-container table {
+  width: 100% !important;
+  border-collapse: collapse !important;
+}
+
+.print-container table th,
+.print-container table td {
+  border: 1px solid #333 !important;
+  padding: 6px 8px !important;
+  font-size: 10px !important;
+}
+
+.print-container table th {
+  background: #f5f5f5 !important;
+  font-weight: 700 !important;
+}
+@page {
+  margin: 15mm;
+}
+
+/* Скрыть URL и дату в браузере */
+@page {
+  @top-center {
+    content: none !important;
+  }
+  @bottom-center {
+    content: none !important;
+  }
+}

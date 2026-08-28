@@ -788,12 +788,12 @@ if (product.status === 'long_term') {
               </p>
             </div>
             <button
-              onClick={handlePrint}
-              className="flex items-center space-x-1.5 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer"
-            >
-              <Printer className="w-4 h-4" />
-              <span>Печать Акта</span>
-            </button>
+  onClick={handlePrint}
+  className="flex items-center space-x-1.5 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer no-print"
+>
+  <Printer className="w-4 h-4" />
+  <span>Печать Акта</span>
+</button>
           </div>
 
           <div className="bg-white dark:bg-slate-900 border border-gray-150 dark:border-slate-800 rounded-xl p-5 shadow-2xs no-print transition-colors duration-200">
@@ -917,130 +917,149 @@ if (product.status === 'long_term') {
 
           {/* TORG-16 Document Preview */}
           <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-xl shadow-xs p-6 md:p-8 overflow-x-auto print-container font-serif text-gray-900 dark:text-slate-100 text-[10px] leading-normal transition-colors duration-200">
-            <div className="text-right text-[8px] mb-4 text-gray-500 dark:text-slate-400">
-              Унифицированная форма № ТОРГ-16<br/>
-              Утверждена постановлением Госкомстата России от 25.12.98 № 132
-            </div>
+  
+  {/* Верхняя часть: шапка */}
+  <div className="text-right text-[8px] mb-4 text-gray-500 dark:text-slate-400 print-hidden">
+    Унифицированная форма № ТОРГ-16<br/>
+    Утверждена постановлением Госкомстата России от 25.12.98 № 132
+  </div>
 
-            <div className="flex justify-between items-start mb-6">
-              <div>
-                <div className="border-b border-black dark:border-slate-700 w-64 pb-0.5 font-bold uppercase">ООО «Розница К-1» (ТС Мария-Ра)</div>
-                <div className="text-[8px] text-gray-500 dark:text-slate-400 mt-0.5">организация (наименование, адрес)</div>
-                <div className="border-b border-black dark:border-slate-700 w-64 pb-0.5 mt-2 font-bold">Супермаркет №54, ул. Ленина, 54</div>
-                <div className="text-[8px] text-gray-500 dark:text-slate-400 mt-0.5">структурное подразделение</div>
-              </div>
-              <div className="border border-black dark:border-slate-700 p-2 text-center text-[9px]">
-                <table className="border-collapse">
-                  <tbody>
-                    <tr><td className="px-2 font-bold">Код по ОКПО</td><td className="border-l border-black dark:border-slate-700 px-2">49830219</td></tr>
-                    <tr className="border-t border-black dark:border-slate-700"><td className="px-2 font-bold">Вид операции</td><td className="border-l border-black dark:border-slate-700 px-2">Списание товара</td></tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
+  <div className="flex justify-between items-start mb-6">
+    <div>
+      <div className="border-b border-black dark:border-slate-700 w-64 pb-0.5 font-bold uppercase">ООО «Розница К-1» (ТС Мария-Ра)</div>
+      <div className="text-[8px] text-gray-500 dark:text-slate-400 mt-0.5">организация (наименование, адрес)</div>
+      <div className="border-b border-black dark:border-slate-700 w-64 pb-0.5 mt-2 font-bold">Супермаркет №54, ул. Ленина, 54</div>
+      <div className="text-[8px] text-gray-500 dark:text-slate-400 mt-0.5">структурное подразделение</div>
+    </div>
+    <div className="border border-black dark:border-slate-700 p-2 text-center text-[9px]">
+      <table className="border-collapse">
+        <tbody>
+          <tr>
+            <td className="px-2 font-bold">Код по ОКПО</td>
+            <td className="border-l border-black dark:border-slate-700 px-2">49830219</td>
+          </tr>
+          <tr className="border-t border-black dark:border-slate-700">
+            <td className="px-2 font-bold">Вид операции</td>
+            <td className="border-l border-black dark:border-slate-700 px-2">Списание товара</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
 
-            <div className="text-center my-6">
-              <h2 className="text-base font-black uppercase">АКТ № {Math.floor(Math.random() * 900) + 100}</h2>
-              <h3 className="text-sm font-bold mt-1">о списании товаров</h3>
-              <p className="mt-2 font-bold">от {new Date().toISOString().split('T')[0].split('-').reverse().join('.')}</p>
-            </div>
+  {/* Заголовок акта */}
+  <div className="text-center my-6">
+    <h2 className="text-base font-black uppercase">АКТ № {Math.floor(Math.random() * 900) + 100}</h2>
+    <h3 className="text-sm font-bold mt-1">о списании товаров</h3>
+    <p className="mt-2 font-bold">от {new Date().toISOString().split('T')[0].split('-').reverse().join('.')}</p>
+  </div>
 
-            <p className="mb-4 leading-relaxed">
-              Комиссия в составе председателя <span className="font-bold underline decoration-black dark:decoration-slate-600">{managerName}</span> и членов комиссии <span className="font-bold underline decoration-black dark:decoration-slate-600">{accountantName}</span>, <span className="font-bold underline decoration-black dark:decoration-slate-600">{inspectorName}</span> произвела осмотр товаров, подлежащих списанию ввиду потери потребительских свойств (истечения установленных сроков годности).
-            </p>
+  {/* Текст комиссии */}
+  <p className="mb-4 leading-relaxed">
+    Комиссия в составе председателя <span className="font-bold underline decoration-black dark:decoration-slate-600">{managerName}</span> и членов комиссии <span className="font-bold underline decoration-black dark:decoration-slate-600">{accountantName}</span>, <span className="font-bold underline decoration-black dark:decoration-slate-600">{inspectorName}</span> произвела осмотр товаров, подлежащих списанию ввиду потери потребительских свойств (истечения установленных сроков годности).
+  </p>
 
-            <table className="w-full border-collapse border border-black dark:border-slate-700 mb-6 text-[9px]">
-              <thead>
-                <tr className="bg-gray-100 dark:bg-slate-800 text-center font-bold">
-                  <th className="border border-black dark:border-slate-700 p-1.5" rowSpan={2}>№ п/п</th>
-                  <th className="border border-black dark:border-slate-700 p-1.5" rowSpan={2}>Наименование товара</th>
-                  <th className="border border-black dark:border-slate-700 p-1.5" rowSpan={2}>Штрихкод (EAN-13)</th>
-                  <th className="border border-black dark:border-slate-700 p-1.5" rowSpan={2}>Ед. изм.</th>
-                  <th className="border border-black dark:border-slate-700 p-1.5" colSpan={3}>Списывается</th>
-                  <th className="border border-black dark:border-slate-700 p-1.5" rowSpan={2}>Причина списания</th>
-                </tr>
-                <tr className="bg-gray-100 dark:bg-slate-800 text-center font-bold border-t border-black dark:border-slate-700">
-                  <th className="border border-black dark:border-slate-700 p-1">Кол-во</th>
-                  <th className="border border-black dark:border-slate-700 p-1">Цена (руб.)</th>
-                  <th className="border border-black dark:border-slate-700 p-1">Сумма (руб.)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {writtenOffProducts.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="text-center p-6 text-gray-400 dark:text-slate-500 font-sans italic">
-                      Списанные товары отсутствуют.
-                    </td>
-                  </tr>
-                ) : (
-                  writtenOffProducts.map((p, idx) => (
-                    <tr key={p.id}>
-                      <td className="border border-black dark:border-slate-700 p-1 text-center font-mono">{idx + 1}</td>
-                      <td className="border border-black dark:border-slate-700 p-1 font-bold">{p.name}</td>
-                      <td className="border border-black dark:border-slate-700 p-1 text-center font-mono">{p.barcode}</td>
-                      <td className="border border-black dark:border-slate-700 p-1 text-center">шт.</td>
-                      <td className="border border-black dark:border-slate-700 p-1 text-center font-bold">{p.quantity}</td>
-                      <td className="border border-black dark:border-slate-700 p-1 text-right">{p.price} ₽</td>
-                      <td className="border border-black dark:border-slate-700 p-1 text-right font-bold">{(p.price * p.quantity).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽</td>
-                      <td className="border border-black dark:border-slate-700 p-1 italic">{p.writeOffReason || 'Истек срок годности'}</td>
-                    </tr>
-                  ))
-                )}
-                <tr className="bg-gray-100 dark:bg-slate-800 font-bold border-t border-black dark:border-slate-700">
-                  <td className="border border-black dark:border-slate-700 p-1 text-right" colSpan={4}>ИТОГО:</td>
-                  <td className="border border-black dark:border-slate-700 p-1 text-center">
-                    {writtenOffProducts.reduce((acc, p) => acc + p.quantity, 0)} шт.
-                  </td>
-                  <td className="border border-black dark:border-slate-700 p-1"></td>
-                  <td className="border border-black dark:border-slate-700 p-1 text-right text-red-700 dark:text-red-400">
-                    {totalLossRub.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽
-                  </td>
-                  <td className="border border-black dark:border-slate-700 p-1"></td>
-                </tr>
-              </tbody>
-            </table>
+  {/* Таблица */}
+  <table className="w-full border-collapse border border-black dark:border-slate-700 mb-6 text-[9px]">
+    <thead>
+      <tr className="bg-gray-100 dark:bg-slate-800 text-center font-bold">
+        <th className="border border-black dark:border-slate-700 p-1.5" rowSpan={2}>№ п/п</th>
+        <th className="border border-black dark:border-slate-700 p-1.5" rowSpan={2}>Наименование товара</th>
+        <th className="border border-black dark:border-slate-700 p-1.5" rowSpan={2}>Штрихкод</th>
+        <th className="border border-black dark:border-slate-700 p-1.5" rowSpan={2}>Ед. изм.</th>
+        <th className="border border-black dark:border-slate-700 p-1.5" colSpan={3}>Списывается</th>
+        <th className="border border-black dark:border-slate-700 p-1.5" rowSpan={2}>Причина</th>
+      </tr>
+      <tr className="bg-gray-100 dark:bg-slate-800 text-center font-bold">
+        <th className="border border-black dark:border-slate-700 p-1">Кол-во</th>
+        <th className="border border-black dark:border-slate-700 p-1">Цена</th>
+        <th className="border border-black dark:border-slate-700 p-1">Сумма</th>
+      </tr>
+    </thead>
+    <tbody>
+      {writtenOffProducts.length === 0 ? (
+        <tr>
+          <td colSpan={8} className="text-center p-6 text-gray-400 dark:text-slate-500 font-sans italic">
+            Списанные товары отсутствуют.
+          </td>
+        </tr>
+      ) : (
+        writtenOffProducts.map((p, idx) => (
+          <tr key={p.id}>
+            <td className="border border-black dark:border-slate-700 p-1 text-center font-mono">{idx + 1}</td>
+            <td className="border border-black dark:border-slate-700 p-1 font-bold text-left">{p.name}</td>
+            <td className="border border-black dark:border-slate-700 p-1 text-center font-mono">{p.barcode}</td>
+            <td className="border border-black dark:border-slate-700 p-1 text-center">шт.</td>
+            <td className="border border-black dark:border-slate-700 p-1 text-center font-bold">{p.quantity}</td>
+            <td className="border border-black dark:border-slate-700 p-1 text-right">{p.price.toFixed(2)}</td>
+            <td className="border border-black dark:border-slate-700 p-1 text-right font-bold">{(p.price * p.quantity).toFixed(2)}</td>
+            <td className="border border-black dark:border-slate-700 p-1 italic text-left">{p.writeOffReason || 'Истек срок годности'}</td>
+          </tr>
+        ))
+      )}
+      <tr className="bg-gray-100 dark:bg-slate-800 font-bold border-t border-black dark:border-slate-700">
+        <td className="border border-black dark:border-slate-700 p-1 text-right" colSpan={4}>ИТОГО:</td>
+        <td className="border border-black dark:border-slate-700 p-1 text-center">
+          {writtenOffProducts.reduce((acc, p) => acc + p.quantity, 0)} шт.
+        </td>
+        <td className="border border-black dark:border-slate-700 p-1"></td>
+        <td className="border border-black dark:border-slate-700 p-1 text-right text-red-700 dark:text-red-400">
+          {totalLossRub.toFixed(2)} ₽
+        </td>
+        <td className="border border-black dark:border-slate-700 p-1"></td>
+      </tr>
+    </tbody>
+  </table>
 
-            <p className="mb-6 leading-relaxed">
-              Всего списано товаров на общую сумму <span className="font-bold underline decoration-black dark:decoration-slate-600">{totalLossRub.toLocaleString()} рублей 00 копеек</span>.
-            </p>
+  {/* Итоговая сумма */}
+  <p className="mb-6 leading-relaxed">
+    Всего списано товаров на общую сумму <span className="font-bold underline decoration-black dark:decoration-slate-600">{totalLossRub.toFixed(2)} рублей</span>.
+  </p>
 
-            <div className="relative grid grid-cols-2 gap-x-8 gap-y-4 pt-4 mt-6 border-t border-gray-200 dark:border-slate-800">
-              {isApprovedByDirector && (
-                <div className="absolute right-6 top-2 border-4 border-double border-emerald-600 text-emerald-600 dark:text-emerald-400 dark:border-emerald-500 font-mono text-[9px] font-black uppercase p-2 rounded-lg rotate-6 bg-white/90 dark:bg-slate-900/90 shadow-sm flex flex-col items-center select-none z-10">
-                  <span>Торговая Сеть «Мария-Ра»</span>
-                  <span className="border-t border-emerald-600 dark:border-emerald-500 my-0.5 w-full"></span>
-                  <span className="text-[10px]">УТВЕРЖДЕНО ЭЦП</span>
-                  <span className="text-[8px] text-gray-500 dark:text-slate-400">{managerName}</span>
-                  <span className="text-[7px]">MR-ACT-TORG16-OK</span>
-                </div>
-              )}
+  {/* Подписи */}
+  <div className="relative grid grid-cols-2 gap-x-8 gap-y-4 pt-4 mt-6 border-t border-gray-200 dark:border-slate-800">
+    {isApprovedByDirector && (
+      <div className="absolute right-6 top-2 border-4 border-double border-emerald-600 text-emerald-600 dark:text-emerald-400 dark:border-emerald-500 font-mono text-[9px] font-black uppercase p-2 rounded-lg rotate-6 bg-white/90 dark:bg-slate-900/90 shadow-sm flex flex-col items-center select-none z-10">
+        <span>Торговая Сеть «Мария-Ра»</span>
+        <span className="border-t border-emerald-600 dark:border-emerald-500 my-0.5 w-full"></span>
+        <span className="text-[10px]">УТВЕРЖДЕНО ЭЦП</span>
+        <span className="text-[8px] text-gray-500 dark:text-slate-400">{managerName}</span>
+        <span className="text-[7px]">MR-ACT-TORG16-OK</span>
+      </div>
+    )}
 
-              <div>
-                <p className="mb-4">Председатель комиссии:</p>
-                <div className="flex items-end space-x-2">
-                  <span className="w-24 border-b border-black dark:border-slate-700 text-center font-mono text-[8px] text-emerald-600 dark:text-emerald-400">{isApprovedByDirector ? 'ПОДПИСАНО ЭЦП' : ''}</span>
-                  <span>/</span>
-                  <span className="font-bold">{managerName}</span>
-                </div>
-              </div>
-              <div>
-                <p className="mb-4">Член комиссии (Бухгалтер):</p>
-                <div className="flex items-end space-x-2">
-                  <span className="w-24 border-b border-black dark:border-slate-700 text-center font-mono text-[8px] text-indigo-600 dark:text-indigo-400">{isExportedTo1C ? 'УТВЕРЖДЕНО' : ''}</span>
-                  <span>/</span>
-                  <span className="font-bold">{accountantName}</span>
-                </div>
-              </div>
-              <div className="col-span-2">
-                <p className="mb-4">Составитель акта:</p>
-                <div className="flex items-end space-x-2">
-                  <span className="w-24 border-b border-black dark:border-slate-700 text-center font-mono text-[8px] text-gray-500">ПОДГОТОВЛЕНО</span>
-                  <span>/</span>
-                  <span className="font-bold">{inspectorName}</span>
-                </div>
-              </div>
-            </div>
-          </div>
+    <div>
+      <p className="mb-4">Председатель комиссии:</p>
+      <div className="flex items-end space-x-2">
+        <span className="w-24 border-b border-black dark:border-slate-700 text-center font-mono text-[8px] text-emerald-600 dark:text-emerald-400">
+          {isApprovedByDirector ? 'ПОДПИСАНО ЭЦП' : ''}
+        </span>
+        <span>/</span>
+        <span className="font-bold">{managerName}</span>
+      </div>
+    </div>
+
+    <div>
+      <p className="mb-4">Член комиссии (Бухгалтер):</p>
+      <div className="flex items-end space-x-2">
+        <span className="w-24 border-b border-black dark:border-slate-700 text-center font-mono text-[8px] text-indigo-600 dark:text-indigo-400">
+          {isExportedTo1C ? 'УТВЕРЖДЕНО' : ''}
+        </span>
+        <span>/</span>
+        <span className="font-bold">{accountantName}</span>
+      </div>
+    </div>
+
+    <div className="col-span-2">
+      <p className="mb-4">Составитель акта:</p>
+      <div className="flex items-end space-x-2">
+        <span className="w-24 border-b border-black dark:border-slate-700 text-center font-mono text-[8px] text-gray-500">ПОДГОТОВЛЕНО</span>
+        <span>/</span>
+        <span className="font-bold">{inspectorName}</span>
+      </div>
+    </div>
+  </div>
+</div>
         </div>
       )}
 
