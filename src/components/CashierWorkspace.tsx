@@ -191,82 +191,117 @@ export default function CashierWorkspace({ currentUser, onDataChange }: CashierW
   // ОПЛАТА
   // ==========================================================
   const handlePayment = async () => {
-    if (cart.length === 0) {
-      setError('Корзина пуста');
-      setTimeout(() => setError(null), 3000);
-      return;
-    }
+  console.log('🟢 handlePayment вызвана!');
+  console.log('📦 Корзина:', cart);
+  
+  if (cart.length === 0) {
+    setError('Корзина пуста');
+    setTimeout(() => setError(null), 3000);
+    return;
+  }
 
-    const total = getTotal();
-    if (paymentMethod === 'cash' && paidAmount < total) {
-      setError('Внесена недостаточная сумма');
-      setTimeout(() => setError(null), 3000);
-      return;
-    }
+  const total = getTotal();
+  console.log('💰 Итоговая сумма:', total);
+  
+  if (paymentMethod === 'cash' && paidAmount < total) {
+    setError('Внесена недостаточная сумма');
+    setTimeout(() => setError(null), 3000);
+    return;
+  }
 
-    try {
-      setLoading(true);
+  try {
+    setLoading(true);
+    console.log('🔄 Начинаем оформление чека...');
+    
+    const receiptNumber = await getNextReceiptNumber('store_1');
+    console.log('📋 Номер чека:', receiptNumber);
+    
+    const receipt = await createReceipt({
+      receipt_number: receiptNumber,
+      cashier_id: currentUser.id,
+      store_id: 'store_1',
+      total_amount: total,
+      payment_method: paymentMethod,
+      paid_amount: paymentMethod === 'cash' ? paidAmount : total,
+      change_amount: paymentMethod === 'cash' ? paidAmount - total : 0,
+      is_return: false
+    });
+
+    if (!receipt) {
+      throw new Error('Не удалось создать чек');
+    }
+    console.log('✅ Чек создан:', receipt.id);
+
+    const items = [];
+    let saleSuccess = true;
+    
+    for (const item of cart) {
+      console.log(`🔄 Обрабатываем товар: ${item.product?.name}`);
       
-      const receiptNumber = await getNextReceiptNumber('store_1');
+      // Проверяем уценку
+      const { data: markdowns } = await supabase
+        .from('markdown_log')
+        .select('new_price')
+        .eq('batch_id', item.batchId)
+        .order('marked_at', { ascending: false })
+        .limit(1);
       
-      const receipt = await createReceipt({
-        receipt_number: receiptNumber,
-        cashier_id: currentUser.id,
-        store_id: 'store_1',
-        total_amount: total,
-        payment_method: paymentMethod,
-        paid_amount: paymentMethod === 'cash' ? paidAmount : total,
-        change_amount: paymentMethod === 'cash' ? paidAmount - total : 0,
-        is_return: false
+      const actualPrice = (markdowns && markdowns.length > 0) 
+        ? markdowns[0].new_price 
+        : item.unitPrice;
+      
+      console.log(`💰 Цена: ${actualPrice}, Кол-во: ${item.quantity}`);
+      
+      items.push({
+        receipt_id: receipt.id,
+        product_id: item.product.id,
+        batch_id: item.batchId,
+        quantity: item.quantity,
+        unit_price: actualPrice,
+        total_price: item.quantity * actualPrice
       });
 
-      if (!receipt) {
-        throw new Error('Не удалось создать чек');
+      // ✅ Списываем товар
+      console.log('🔄 Вызываем recordSaleInSupabase...');
+      const success = await recordSaleInSupabase(
+        item.product.id,
+        item.quantity,
+        actualPrice,
+        item.batchId
+      );
+      
+      if (success) {
+        console.log('✅ Товар успешно списан');
+      } else {
+        console.error('❌ Ошибка списания товара');
+        saleSuccess = false;
       }
-
-      const items = [];
-     for (const item of cart) {
-  // Проверяем уценку для этой партии
-  const { data: markdowns } = await supabase
-    .from('markdown_log')
-    .select('new_price')
-    .eq('batch_id', item.batchId)
-    .order('marked_at', { ascending: false })
-    .limit(1);
-  
-  const actualPrice = (markdowns && markdowns.length > 0) 
-    ? markdowns[0].new_price 
-    : item.unitPrice;
-  
-  items.push({
-    receipt_id: receipt.id,
-    product_id: item.product.id,
-    batch_id: item.batchId,
-    quantity: item.quantity,
-    unit_price: actualPrice,
-    total_price: item.quantity * actualPrice
-  });
-}
-
-      await createReceiptItems(items);
-      
-      await loadReceipts();
-      await onDataChange();
-      
-      clearCart();
-      setPaidAmount(0);
-      
-      setSuccessMessage(`Чек №${receiptNumber} успешно оформлен!`);
-      setTimeout(() => setSuccessMessage(null), 3000);
-      
-    } catch (error) {
-      console.error('❌ Ошибка оформления чека:', error);
-      setError('Ошибка оформления чека');
-      setTimeout(() => setError(null), 3000);
-    } finally {
-      setLoading(false);
     }
-  };
+
+    if (!saleSuccess) {
+      console.error('❌ Ошибка при списании товаров');
+    }
+
+    await createReceiptItems(items);
+    console.log('✅ Позиции чека созданы');
+    
+    await loadReceipts();
+    await onDataChange();
+    
+    clearCart();
+    setPaidAmount(0);
+    
+    setSuccessMessage(`Чек №${receiptNumber} успешно оформлен!`);
+    setTimeout(() => setSuccessMessage(null), 3000);
+    
+  } catch (error) {
+    console.error('❌ Ошибка оформления чека:', error);
+    setError('Ошибка оформления чека');
+    setTimeout(() => setError(null), 3000);
+  } finally {
+    setLoading(false);
+  }
+};
 
   // ==========================================================
   // СКАЧИВАНИЕ ЧЕКОВ И ОТЧЁТОВ
