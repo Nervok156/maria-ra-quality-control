@@ -394,8 +394,13 @@ export async function createEmployeeSchedule(schedule: any) {
 export async function getSalesLog() {
   const { data, error } = await supabase
     .from('sales_log')
-    .select('*, products(*)');
-  if (error) throw error;
+    .select('*, products(*)')
+    .order('sold_at', { ascending: false });
+  
+  if (error) {
+    console.error('❌ Ошибка получения sales_log:', error);
+    throw error;
+  }
   return data || [];
 }
 
