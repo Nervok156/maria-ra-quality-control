@@ -27,28 +27,43 @@ export default function FreshnessControl({ products, setProducts, currentUser, o
   }, [activeSubTab]);
 
 const handlePrint = () => {
-  // Запоминаем текущий title
   const originalTitle = document.title;
   
   // Меняем title на пустую строку (убирает название по центру)
   document.title = '';
   
-  // Добавляем стиль для скрытия колонтитулов
+  // Создаем стили для печати
   const style = document.createElement('style');
   style.textContent = `
     @page {
-      margin-top: 15mm;
-      margin-bottom: 15mm;
-      margin-left: 15mm;
-      margin-right: 15mm;
+      size: A4;
+      margin: 15mm 15mm 15mm 15mm;
     }
-    /* Работает в Chrome/Edge */
+    
+    /* Убираем ВСЕ колонтитулы */
+    @page {
+      @top-left { content: none !important; }
+      @top-center { content: none !important; }
+      @top-right { content: none !important; }
+      @bottom-left { content: none !important; }
+      @bottom-center { content: none !important; }
+      /* Оставляем только номер страницы справа внизу */
+      @bottom-right { 
+        content: counter(page) !important;
+        font-size: 10px !important;
+        font-family: 'Times New Roman', serif !important;
+        color: #666666 !important;
+      }
+    }
+    
+    /* Альтернативный способ для Chrome */
     @page {
       @top-left { content: '' !important; }
       @top-center { content: '' !important; }
       @top-right { content: '' !important; }
       @bottom-left { content: '' !important; }
       @bottom-center { content: '' !important; }
+      @bottom-right { content: counter(page) !important; }
     }
   `;
   document.head.appendChild(style);
@@ -64,6 +79,7 @@ const handlePrint = () => {
     }
   }, 100);
 };
+
 
 
   // ✅ Проверка прав на уценку
